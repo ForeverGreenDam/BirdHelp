@@ -1,0 +1,45 @@
+# 应用服务 WEB 访问端口
+server:
+  port: 7890
+  servlet:
+    context-path: /api
+
+
+spring:
+  profiles:
+    active: dev
+  datasource:
+    url: jdbc:mysql://${datasource.url}/birdhelp?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC
+    username: ${datasource.username}
+    password: ${datasource.password}
+
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      idType: ASSIGN_ID
+      logic-delete-field: delFlag
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  mapper-locations: classpath*:/mapper/**/*.xml
+  check-config-location: true
+
+
+knife4j:
+  enable: true
+  basic:
+    # 接口文档账号密码
+    enable: ${knife4j.basic.enable}
+    username: ${knife4j.basic.username}
+    password: ${knife4j.basic.password}
+  openapi:
+    title: 水课帮接口文档
+    group:
+      default:
+        group-name: 默认分组
+        api-rule: package
+        api-rule-resources:
+          - com.greendam.birdhelp.controller
+
