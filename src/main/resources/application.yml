@@ -50,3 +50,6 @@ jwt:
   user-secret-key: ${jwt.user-secret-key}
   user-token-name: token
   user-ttl: 300000
+internal-api:
+  public-key: ${internal-api.public-key}
+  timestamp-window: 300
