@@ -53,3 +53,6 @@ jwt:
 internal-api:
   public-key: ${internal-api.public-key}
   timestamp-window: 300
+
+app:
+  upload-dir: ./upload
