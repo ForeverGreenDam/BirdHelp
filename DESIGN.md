@@ -8,6 +8,8 @@
 
 与 AI 模块的关系：Java 后端通过定义好的内部接口调用 AI 模块（另建工程），自身不实现任何 AI 逻辑。
 
+当前模块：用户、额度、文件、会员、AI 对接。
+
 ---
 
 ## 二、用户模块 (user)
@@ -39,35 +41,34 @@
 
 ```sql
 CREATE TABLE `sys_user` (
-                          `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键用户ID',
-                          `tenant_id` bigint DEFAULT 0 COMMENT '租户ID，多租户预留',
-                          `username` varchar(50) NOT NULL COMMENT '登录账号',
-                          `nickname` varchar(50) NOT NULL COMMENT '用户昵称',
-                          `password` varchar(100) NOT NULL COMMENT '加密密码',
-                          `avatar` varchar(255) DEFAULT '' COMMENT '头像地址',
-                          `phone` varchar(20) DEFAULT '' COMMENT '手机号',
-                          `email` varchar(100) DEFAULT '' COMMENT '邮箱',
-                          `sex` tinyint DEFAULT 0 COMMENT '性别 0-未知 1-男 2-女',
-                          `birthday` date DEFAULT NULL COMMENT '出生日期',
-                          `user_type` tinyint DEFAULT 1 COMMENT '用户类型 1-普通学生 2-管理员',
-                          `status` tinyint DEFAULT 1 COMMENT '账号状态 0-禁用 1-正常',
-                          `wx_openid` varchar(100) DEFAULT '' COMMENT '微信openid',
-                          `wx_unionid` varchar(100) DEFAULT '' COMMENT '微信unionid',
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键用户ID',
+    `tenant_id` bigint DEFAULT 0 COMMENT '租户ID，多租户预留',
+    `username` varchar(50) NOT NULL COMMENT '登录账号',
+    `nickname` varchar(50) NOT NULL COMMENT '用户昵称',
+    `password` varchar(100) NOT NULL COMMENT '加密密码',
+    `avatar` varchar(255) DEFAULT '' COMMENT '头像地址',
+    `phone` varchar(20) DEFAULT '' COMMENT '手机号',
+    `email` varchar(100) DEFAULT '' COMMENT '邮箱',
+    `sex` tinyint DEFAULT 0 COMMENT '性别 0-未知 1-男 2-女',
+    `birthday` date DEFAULT NULL COMMENT '出生日期',
+    `user_type` tinyint DEFAULT 1 COMMENT '用户类型 1-普通学生 2-管理员',
+    `status` tinyint DEFAULT 1 COMMENT '账号状态 0-禁用 1-正常',
+    `wx_openid` varchar(100) DEFAULT '' COMMENT '微信openid',
+    `wx_unionid` varchar(100) DEFAULT '' COMMENT '微信unionid',
 
-  -- 标准审计字段
-                          `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-                          `create_by` varchar(64) DEFAULT '' COMMENT '创建人',
-                          `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-                          `update_by` varchar(64) DEFAULT '' COMMENT '更新人',
-                          `del_flag` tinyint DEFAULT 0 COMMENT '逻辑删除 0-未删除 1-已删除',
-                          `version` int DEFAULT 0 COMMENT '乐观锁版本号',
+    -- 标准审计字段
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `create_by` varchar(64) DEFAULT '' COMMENT '创建人',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `update_by` varchar(64) DEFAULT '' COMMENT '更新人',
+    `del_flag` tinyint DEFAULT 0 COMMENT '逻辑删除 0-未删除 1-已删除',
+    `version` int DEFAULT 0 COMMENT '乐观锁版本号',
 
-                          PRIMARY KEY (`id`),
-                          UNIQUE KEY `uk_username` (`username`),
-                          UNIQUE KEY `uk_phone` (`phone`),
-                          UNIQUE KEY `uk_email` (`email`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户信息表';****
-
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_username` (`username`),
+    UNIQUE KEY `uk_phone` (`phone`),
+    UNIQUE KEY `uk_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户信息表';
 ```
 
 ---
@@ -125,7 +126,7 @@ quota_log (              -- 额度流水，方便对账
     id BIGINT PK,
     user_id BIGINT,
     change_type TINYINT, -- 1扣减 2退还
-    project_id BIGINT,   -- 关联的项目ID
+    related_id BIGINT,   -- 关联业务ID
     created_at DATETIME
 )
 ```
@@ -136,9 +137,9 @@ quota_log (              -- 额度流水，方便对账
 
 ### 4.1 功能点
 
-- 文件上传（参考资料上传、模板素材上传、生成结果存储）
+- 文件上传（参考资料上传、生成结果存储）
 - 文件下载
-- 文件列表：按类型筛选（PPT/Word/PDF）、按课程归档、按时间排序、分页
+- 文件列表：按类型筛选（PPT/Word/PDF）、按时间排序、分页
 - 文件搜索：按文件名模糊搜索
 - 回收站：软删除 → 30 天自动清理（定时任务）
 - 文件恢复：从回收站恢复
@@ -149,7 +150,7 @@ quota_log (              -- 额度流水，方便对账
 |------|------|------|
 | POST | /api/file/upload | 上传文件 |
 | GET | /api/file/{id}/download | 下载文件 |
-| GET | /api/file/list | 文件列表（分页、类型筛选、课程筛选、排序） |
+| GET | /api/file/list | 文件列表（分页、类型筛选、排序） |
 | GET | /api/file/search | 文件搜索 |
 | DELETE | /api/file/{id} | 删除文件（移入回收站） |
 | PUT | /api/file/{id}/restore | 从回收站恢复 |
@@ -162,7 +163,6 @@ quota_log (              -- 额度流水，方便对账
 - 生产环境：阿里云 OSS（`app.oss.enabled=true` 时启用）
 - 路径规则：`{file_type}/{yyyy-MM}/{uuid}.{ext}`
   - 示例：`ppt/2026-05/a1b2c3d4.pptx`
-- 模板预览图：`template/preview/{template_id}.png`
 
 ### 4.4 核心表
 
@@ -170,13 +170,11 @@ quota_log (              -- 额度流水，方便对账
 file_record (
     id BIGINT PK,
     user_id BIGINT FK,
-    project_id BIGINT,           -- 关联项目，可为空
     file_name VARCHAR(255),      -- 原始文件名
     file_type TINYINT,           -- 1PPT 2Word 3PDF 4图片 5其他
     file_size BIGINT,            -- 字节
     file_url VARCHAR(500),       -- 存储路径或 OSS URL
     source TINYINT,              -- 1用户上传 2AI生成
-    course_name VARCHAR(100),    -- 归档课程名
     deleted TINYINT DEFAULT 0,   -- 0正常 1回收站
     deleted_at DATETIME,         -- 删除时间，用于30天清理
     created_at DATETIME,
@@ -184,9 +182,11 @@ file_record (
 )
 ```
 
-## 七、会员模块 (member)
+---
 
-### 7.1 功能点
+## 五、会员模块 (member)
+
+### 5.1 功能点
 
 - 套餐列表：会员套餐配置（后台管理维护）
 - 创建订单：选择套餐 → 生成订单
@@ -194,16 +194,16 @@ file_record (
 - 会员状态查询：当前等级、到期时间
 - 过期处理：定时任务检查过期会员 → 回退到免费等级
 
-### 7.2 支付流程
+### 5.2 支付流程
 
 ```
 用户选套餐 → 创建订单(pending) → 调起支付 → 支付回调 → 更新订单(paid) → 激活会员
-                                                     → 支付失败 → 订单过期(expired)
+                                                    → 支付失败 → 订单过期(expired)
 ```
 
 初期先做微信支付（JSAPI），后续扩展支付宝。
 
-### 7.3 接口列表
+### 5.3 接口列表
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -214,7 +214,7 @@ file_record (
 | POST | /api/member/pay-callback | 支付回调（第三方调用） |
 | GET | /api/member/status | 当前会员状态 |
 
-### 7.4 核心表
+### 5.4 核心表
 
 ```sql
 member_plan (
@@ -245,44 +245,9 @@ member_order (
 
 ---
 
-## 八、消息通知模块 (notify)
+## 六、与 AI 模块的对接
 
-### 8.1 功能点
-
-- 系统通知：生成完成、额度不足提醒、会员到期提醒
-- 通知列表：分页、已读/未读状态
-- 标记已读：单条 / 全部
-- 未读数量
-
-### 8.2 接口列表
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | /api/notify/list | 通知列表（分页） |
-| GET | /api/notify/unread-count | 未读数量 |
-| PUT | /api/notify/{id}/read | 标记单条已读 |
-| PUT | /api/notify/read-all | 全部已读 |
-
-### 8.3 核心表
-
-```sql
-notification (
-    id BIGINT PK,
-    user_id BIGINT FK,
-    title VARCHAR(200),
-    content VARCHAR(1000),
-    type TINYINT,                 -- 1生成完成 2额度不足 3会员到期 4系统通知
-    related_id BIGINT,            -- 关联业务ID（如 project_id）
-    read_flag TINYINT DEFAULT 0,
-    created_at DATETIME
-)
-```
-
----
-
-## 九、与 AI 模块的对接
-
-### 9.1 职责边界
+### 6.1 职责边界
 
 ```
 Java 后端（本工程）                  AI 模块（另建工程）
@@ -290,13 +255,12 @@ Java 后端（本工程）                  AI 模块（另建工程）
 用户认证/权限校验                     调用大模型 API
 额度校验与扣减                        Prompt 组装
 文件存储                             文档内容生成
-模板管理                             PPT/Word/PDF 文件生成
-项目记录维护                         语音转文字
-订单支付                             OCR 识别
-消息通知
+会员管理                             PPT/Word/PDF 文件生成
+                                     语音转文字
+                                     OCR 识别
 ```
 
-### 9.2 内部调用协议
+### 6.2 内部调用协议
 
 Java 后端暴露给 AI 模块的内部接口（通过 HTTP，可加内部 token 校验）：
 
@@ -304,8 +268,6 @@ Java 后端暴露给 AI 模块的内部接口（通过 HTTP，可加内部 token
 |------|------|------|
 | POST | /internal/quota/consume | AI 生成前扣减额度 |
 | POST | /internal/quota/refund | 生成失败退还额度 |
-| POST | /internal/project | 创建项目记录 |
-| PUT | /internal/project/{id} | 更新项目状态（完成/失败） |
 | POST | /internal/file/upload | AI 模块上传生成结果文件 |
 
 AI 模块暴露给 Java 后端的接口（由前端直接调用，或 Java 后端代理转发）：
@@ -317,21 +279,18 @@ AI 模块暴露给 Java 后端的接口（由前端直接调用，或 Java 后�
 | POST | /ai/pdf/generate | 生成 PDF |
 | POST | /ai/chat/modify | 对话式修改文档 |
 
-### 9.3 一次生成请求的完整调用链
+### 6.3 一次生成请求的完整调用链
 
 ```
-前端 → Java后端(/api/project) → 额度校验扣减 → 创建project记录
+前端 → Java后端(/api/quota/consume) → 额度校验扣减
      → 调用AI模块(/ai/ppt/generate)
      → AI模块生成内容 → 调用Java后端(/internal/file/upload) 保存结果
-     → 调用Java后端(/internal/project/{id}) 更新状态
-     → Java后端发送完成通知
+     → Java后端返回文件信息
 ```
-
-前端轮询 project 状态或通过 WebSocket 推送状态变更。
 
 ---
 
-## 十、技术选型
+## 七、技术选型
 
 | 组件 | 选型 | 说明 |
 |------|------|------|
@@ -348,7 +307,7 @@ AI 模块暴露给 Java 后端的接口（由前端直接调用，或 Java 后�
 
 ---
 
-## 十一、工程结构
+## 八、工程结构
 
 ```
 src/main/java/com/greendam/birdhelp/
@@ -366,19 +325,15 @@ src/main/java/com/greendam/birdhelp/
 │   │   └── entity/
 │   ├── quota/                     -- 额度模块
 │   ├── file/                      -- 文件模块
-│   ├── template/                  -- 模板模块
-│   ├── project/                   -- 项目模块
-│   ├── member/                    -- 会员模块
-│   └── notify/                    -- 通知模块
+│   └── member/                    -- 会员模块
 └── internal/                      -- 内部接口（给AI模块调用）
     ├── QuotaInternalController.java
-    ├── ProjectInternalController.java
     └── FileInternalController.java
 ```
 
 ---
 
-## 十二、开发顺序
+## 九、开发顺序
 
 ### 第一阶段：基础骨架
 - [x] 工程初始化
@@ -388,12 +343,7 @@ src/main/java/com/greendam/birdhelp/
 ### 第二阶段：核心业务
 - [ ] 额度模块（查询、扣减、退还、每日重置）
 - [ ] 文件模块（上传、下载、列表、删除）
-- [ ] 项目模块（CRUD、课程标签）
-
-### 第三阶段：扩展功能
-- [ ] 模板模块（列表、收藏、用户模板）
 - [ ] 内部接口（对接 AI 模块）
-- [ ] 消息通知
 
-### 第四阶段：商业化
+### 第三阶段：商业化
 - [ ] 会员模块（套餐、订单、支付回调）
