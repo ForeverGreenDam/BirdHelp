@@ -101,34 +101,64 @@ CREATE TABLE `sys_user` (
 | POST | /api/quota/consume | 扣减额度（内部调用，由 AI 模块发起） |
 | POST | /api/quota/refund | 退还额度（内部调用，生成失败时） |
 
-### 3.4 核心表
+### 3.4 额度配置预设
+
+| 等级 | 名称 | 每日上限 |
+|------|------|----------|
+| 0 | 免费用户 | 10 次 |
+| 1 | 月卡 | 30 次 |
+| 2 | 季卡 | 60 次 |
+| 3 | 年卡 | 100 次 |
+
+### 3.5 核心表
 
 ```sql
-user_quota (
-    id BIGINT PK,
-    user_id BIGINT FK,
-    member_level TINYINT DEFAULT 0,  -- 0免费 1月卡 2季卡 3年卡
-    member_expire_at DATETIME,       -- 会员到期时间
-    daily_used INT DEFAULT 0,        -- 今日已用次数
-    daily_date DATE,                 -- 已用次数对应日期，用于跨天判断
-    created_at DATETIME,
-    updated_at DATETIME
-)
+-- 用户额度表
+CREATE TABLE `user_quota` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `member_level` tinyint DEFAULT 0 COMMENT '会员等级 0-免费 1-月卡 2-季卡 3-年卡',
+    `member_expire_at` datetime DEFAULT NULL COMMENT '会员到期时间',
+    `daily_used` int DEFAULT 0 COMMENT '今日已用次数',
+    `daily_date` date DEFAULT NULL COMMENT '已用次数对应日期，用于跨天判断',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `create_by` varchar(64) DEFAULT '' COMMENT '创建人',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `update_by` varchar(64) DEFAULT '' COMMENT '更新人',
+    `del_flag` tinyint DEFAULT 0 COMMENT '逻辑删除 0-未删除 1-已删除',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户额度表';
 
-quota_config (           -- 额度配置表，后台管理维护
-    id BIGINT PK,
-    level TINYINT,       -- 0免费 1月卡 2季卡 3年卡
-    daily_limit INT,     -- 每日上限
-    updated_at DATETIME
-)
+-- 额度配置表，后台管理维护
+CREATE TABLE `quota_config` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `level` tinyint NOT NULL COMMENT '会员等级 0-免费 1-月卡 2-季卡 3-年卡',
+    `daily_limit` int NOT NULL COMMENT '每日生成次数上限',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `create_by` varchar(64) DEFAULT '' COMMENT '创建人',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `update_by` varchar(64) DEFAULT '' COMMENT '更新人',
+    `del_flag` tinyint DEFAULT 0 COMMENT '逻辑删除 0-未删除 1-已删除',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_level` (`level`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='额度配置表';
 
-quota_log (              -- 额度流水，方便对账
-    id BIGINT PK,
-    user_id BIGINT,
-    change_type TINYINT, -- 1扣减 2退还
-    related_id BIGINT,   -- 关联业务ID
-    created_at DATETIME
-)
+-- 额度流水表，用于对账追溯
+CREATE TABLE `quota_log` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `change_type` tinyint NOT NULL COMMENT '变更类型 1-扣减 2-退还',
+    `related_id` bigint DEFAULT NULL COMMENT '关联业务ID',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `create_by` varchar(64) DEFAULT '' COMMENT '创建人',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `update_by` varchar(64) DEFAULT '' COMMENT '更新人',
+    `del_flag` tinyint DEFAULT 0 COMMENT '逻辑删除 0-未删除 1-已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='额度流水表';
 ```
 
 ---
