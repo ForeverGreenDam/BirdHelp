@@ -95,7 +95,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
     public void registerByPhone(PhoneRegisterDTO dto) {
         checkPhoneNotExists(dto.getPhone());
         checkUsernameNotExists(dto.getUsername());
-        verifyCode("register", dto.getPhone(), dto.getCode());
+        consumeVerifyCode("register", dto.getPhone(), dto.getCode());
 
         SysUser user = new SysUser();
         user.setPhone(dto.getPhone());
@@ -106,7 +106,6 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
         user.setUserType(1);
         save(user);
 
-        deleteVerifyCode("register", dto.getPhone());
         log.info("手机号注册成功: {}", dto.getPhone());
     }
 
@@ -128,7 +127,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
     public void registerByEmail(EmailRegisterDTO dto) {
         checkEmailNotExists(dto.getEmail());
         checkUsernameNotExists(dto.getUsername());
-        verifyCode("register", dto.getEmail(), dto.getCode());
+        consumeVerifyCode("register", dto.getEmail(), dto.getCode());
 
         SysUser user = new SysUser();
         user.setEmail(dto.getEmail());
@@ -139,7 +138,6 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
         user.setUserType(1);
         save(user);
 
-        deleteVerifyCode("register", dto.getEmail());
         log.info("邮箱注册成功: {}", dto.getEmail());
     }
 
@@ -280,11 +278,10 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
         if (user == null) {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
-        verifyCode("reset", dto.getAccount(), dto.getCode());
+        consumeVerifyCode("reset", dto.getAccount(), dto.getCode());
 
         user.setPassword(BCrypt.hashpw(dto.getNewPassword()));
         updateById(user);
-        deleteVerifyCode("reset", dto.getAccount());
         log.info("重置密码成功: {}", dto.getAccount());
     }
 
@@ -328,29 +325,22 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
     }
 
     /**
-     * 校验 Redis 中存储的验证码是否匹配。
+     * 消费验证码：原子性地取出并删除，匹配失败则抛出异常。
+     *
+     * <p>使用 Redis {@code GETDEL} 命令一次性完成读取和删除，
+     * 杜绝两步操作之间的并发重放窗口。</p>
      *
      * @param type   验证码类型（register / login / reset）
      * @param target 手机号或邮箱
      * @param code   用户提交的验证码
      * @throws BusinessException {@code VERIFY_CODE_ERROR(40006)} — 验证码不存在或不匹配
      */
-    private void verifyCode(String type, String target, String code) {
+    private void consumeVerifyCode(String type, String target, String code) {
         String key = VERIFY_CODE_PREFIX + type + ":" + target;
-        String storedCode = stringRedisTemplate.opsForValue().get(key);
+        String storedCode = stringRedisTemplate.opsForValue().getAndDelete(key);
         if (storedCode == null || !storedCode.equals(code)) {
             throw new BusinessException(ErrorCode.VERIFY_CODE_ERROR);
         }
-    }
-
-    /**
-     * 验证码使用后从 Redis 中删除，防止重复使用。
-     *
-     * @param type   验证码类型
-     * @param target 手机号或邮箱
-     */
-    private void deleteVerifyCode(String type, String target) {
-        stringRedisTemplate.delete(VERIFY_CODE_PREFIX + type + ":" + target);
     }
 
     /**

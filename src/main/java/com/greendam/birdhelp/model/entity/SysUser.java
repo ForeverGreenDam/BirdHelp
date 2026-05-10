@@ -32,7 +32,7 @@ public class SysUser extends BaseEntity {
     /**
      * 主键用户 ID，数据库自增。
      */
-    @TableId(type = IdType.AUTO)
+    @TableId
     private Long id;
 
     /**
