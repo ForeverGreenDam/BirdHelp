@@ -12,6 +12,10 @@ spring:
     url: jdbc:mysql://${datasource.url}/birdhelp?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC
     username: ${datasource.username}
     password: ${datasource.password}
+  redis:
+    host: ${redis.host}
+    port: ${redis.port}
+    database: ${redis.database}
 
 
 mybatis-plus:
@@ -42,4 +46,7 @@ knife4j:
         api-rule: package
         api-rule-resources:
           - com.greendam.birdhelp.controller
-
+jwt:
+  user-secret-key: ${jwt.user-secret-key}
+  user-token-name: token
+  user-ttl: 300000

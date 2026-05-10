@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
  * @author ForeverGreenDam
  */
 @Component
-@ConfigurationProperties(prefix = "your.alioss")
+@ConfigurationProperties(prefix = "alioss")
 @Data
 public class AliOssProperties {
 

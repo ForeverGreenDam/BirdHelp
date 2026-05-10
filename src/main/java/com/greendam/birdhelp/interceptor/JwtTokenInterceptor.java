@@ -16,8 +16,24 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 /**
- * jwt令牌校验的拦截器
+ * <p>
+ * JWT 令牌校验拦截器，在请求到达 Controller 之前对受保护路径进行鉴权。
+ * </p>
+ *
+ * <h3>拦截流程</h3>
+ * <ol>
+ *   <li>判断当前拦截目标是否为 Controller 方法，非动态资源直接放行</li>
+ *   <li>从请求头 {@code token} 中获取 JWT 令牌</li>
+ *   <li>解析令牌，提取 {@code id} 声明作为当前用户 ID</li>
+ *   <li>将用户 ID 存入 {@link BaseContext} 的 ThreadLocal 中，供后续处理使用</li>
+ *   <li>请求结束后在 {@link #afterCompletion} 中清理 ThreadLocal，防止内存泄漏</li>
+ * </ol>
+ *
+ * <h3>鉴权失败处理</h3>
+ * <p>令牌缺失、过期或签名不匹配时，返回 HTTP 401 状态码并拦截请求。</p>
+ *
  * @author ForeverGreenDam
+ * @see com.greendam.birdhelp.config.WebMvcConfiguration
  */
 @Component
 @Slf4j
@@ -27,40 +43,45 @@ public class JwtTokenInterceptor implements HandlerInterceptor {
     private JwtProperties jwtProperties;
 
     /**
-     * 校验jwt
+     * <p>Controller 方法调用前执行，完成 JWT 校验和用户身份注入。</p>
      *
-     * @param request
-     * @param response
-     * @param handler
-     * @return
-     * @throws Exception
+     * @param request  当前 HTTP 请求
+     * @param response 当前 HTTP 响应
+     * @param handler  目标处理器（非 {@link HandlerMethod} 时直接放行）
+     * @return {@code true} 放行，{@code false} 拦截（返回 401）
      */
     @Override
-    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         log.info("进入JWT令牌校验拦截器...");
-        //判断当前拦截到的是Controller的方法还是其他资源
         if (!(handler instanceof HandlerMethod)) {
-            //当前拦截到的不是动态方法，直接放行
             return true;
         }
 
-        //1、从请求头中获取令牌
         String token = request.getHeader(jwtProperties.getUserTokenName());
 
-        //2、校验令牌
         try {
             log.info("jwt校验:{}", token);
             Claims claims = JwtUtil.parseJWT(jwtProperties.getUserSecretKey(), token);
             Long userId = Long.valueOf(claims.get(JwtClaimsConstant.USER_ID).toString());
             log.info("当前用户id：{}", userId);
-            //将当前员工id存入ThreadLocal
             BaseContext.setCurrentId(userId);
-            //3、通过，放行
             return true;
         } catch (Exception ex) {
-            //4、不通过，响应401状态码
             response.setStatus(401);
             return false;
         }
+    }
+
+    /**
+     * <p>请求完成后清理 ThreadLocal，防止内存泄漏。</p>
+     *
+     * @param request  当前 HTTP 请求
+     * @param response 当前 HTTP 响应
+     * @param handler  目标处理器
+     * @param ex       处理器执行中抛出的异常（可为 {@code null}）
+     */
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
+        BaseContext.removeCurrentId();
     }
 }
