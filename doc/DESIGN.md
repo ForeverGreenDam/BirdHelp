@@ -292,40 +292,78 @@ member_order (
 ```
 Java 后端（本工程）                  AI 模块（另建工程）
 ─────────────────                    ─────────────────
-用户认证/权限校验                     调用大模型 API
-额度校验与扣减                        Prompt 组装
-文件存储                             文档内容生成
-会员管理                             PPT/Word/PDF 文件生成
-                                     语音转文字
-                                     OCR 识别
+用户认证/权限校验                      调用大模型 API
+额度校验与扣减                         Prompt 组装
+文件存储（含素材文件）                   文档内容生成
+会员管理                              PPT/Word/PDF 文件生成
+                                      OCR 识别
+                                      RAG 检索增强生成
+                                      素材文件文本提取与向量化
+                                      Redis 向量存储与检索
 ```
 
-### 6.2 内部调用协议
+### 6.2 AI 模块暴露的接口（前端直接调用）
 
-Java 后端暴露给 AI 模块的内部接口（通过 HTTP，可加内部 token 校验）：
+| 方法 | 路径 | 用途                                  |
+|------|------|-------------------------------------|
+| POST | /ai/ppt/generate | 生成 PPT（支持 RAG 增强）                   |
+| POST | /ai/word/generate | 生成 Word（支持 RAG 增强）                  |
+| POST | /ai/pdf/generate | 生成 PDF（支持 RAG 增强）                   |
+| POST | /ai/chat/modify | 对话式修改文档                             |
+| POST | /ai/material/upload | 上传参考素材并触发 RAG 摄取（文本提取→向量化→存入 Redis） |
+| GET | /ai/material/list | 查询用户素材列表，代理 Java 后端文件列表接口           |
+| DELETE | /ai/material/{material_id} | 删除素材：Java 后端软删除 + Redis向量清理         |
+
+### 6.3 Java 后端暴露给 AI 模块的内部接口
+
+所有内部接口均通过 `/internal/*` 路径，使用 RSA 签名校验（`X-Timestamp` + `X-Nonce` + `X-Signature`）替代 JWT 鉴权。
 
 | 方法 | 路径 | 用途 |
 |------|------|------|
 | POST | /internal/quota/consume | AI 生成前扣减额度 |
 | POST | /internal/quota/refund | 生成失败退还额度 |
-| POST | /internal/file/upload | AI 模块上传生成结果文件 |
+| POST | /internal/file/upload | AI 模块上传生成结果文件 / 保存素材文件 |
+| GET | /internal/file/list | AI 模块代理查询用户文件列表（素材列表代理） |
+| DELETE | /internal/file/{id} | AI 模块触发软删除文件，移入回收站 |
 
-AI 模块暴露给 Java 后端的接口（由前端直接调用，或 Java 后端代理转发）：
+### 6.4 调用链
 
-| 方法 | 路径 | 用途 |
-|------|------|------|
-| POST | /ai/ppt/generate | 生成 PPT |
-| POST | /ai/word/generate | 生成 Word |
-| POST | /ai/pdf/generate | 生成 PDF |
-| POST | /ai/chat/modify | 对话式修改文档 |
-
-### 6.3 一次生成请求的完整调用链
+#### 文档生成（含 RAG 增强）
 
 ```
 前端 → Java后端(/api/quota/consume) → 额度校验扣减
      → 调用AI模块(/ai/ppt/generate)
-     → AI模块生成内容 → 调用Java后端(/internal/file/upload) 保存结果
+     → AI模块从 Redis 检索相关素材向量（RAG）
+     → AI模块结合素材上下文生成内容
+     → 调用Java后端(/internal/file/upload) 保存生成结果
      → Java后端返回文件信息
+```
+
+#### 素材上传与 RAG 摄取
+
+```
+前端 → AI模块(/ai/material/upload)
+     → AI模块调用Java后端(/internal/file/upload) 保存文件
+     → Java后端返回文件信息
+     → AI模块异步执行 RAG 摄取：文本提取 → 分块 → 向量化 → 存入 Redis
+```
+
+#### 素材列表查询
+
+```
+前端 → AI模块(/ai/material/list)
+     → AI模块调用Java后端(/internal/file/list) 代理查询
+     → Java后端返回分页文件列表
+     → AI模块返回给前端
+```
+
+#### 素材删除
+
+```
+前端 → AI模块(/ai/material/{material_id})
+     → AI模块调用Java后端(/internal/file/{id}) 软删除文件（移入回收站）
+     → AI模块清理 Redis 中对应 material_id 的向量数据
+     → AI模块返回删除结果
 ```
 
 ---
