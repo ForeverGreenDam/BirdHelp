@@ -56,3 +56,8 @@ internal-api:
 
 app:
   upload-dir: ./upload
+alioss:
+  access-key-id: ${alioss.access-key-id}
+  access-key-secret: ${alioss.access-key-secret}
+  bucket-name: ${alioss.bucket-name}
+  endpoint: ${alioss.endpoint}

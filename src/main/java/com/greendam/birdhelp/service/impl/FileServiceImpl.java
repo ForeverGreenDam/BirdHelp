@@ -247,6 +247,31 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
                 .build();
     }
 
+    @Override
+    public int cleanExpiredRecycle() {
+        LocalDateTime threshold = LocalDateTime.now().minusDays(RECYCLE_DAYS);
+        LambdaQueryWrapper<FileRecord> wrapper = new LambdaQueryWrapper<FileRecord>()
+                .eq(FileRecord::getDeleted, 1)
+                .le(FileRecord::getDeletedAt, threshold);
+
+        List<FileRecord> expiredRecords = list(wrapper);
+        int count = 0;
+        for (FileRecord record : expiredRecords) {
+            try {
+                fileStorageService.delete(record.getFileUrl());
+            } catch (Exception e) {
+                log.warn("清理过期文件失败，跳过: id={}, url={}", record.getId(), record.getFileUrl(), e);
+                continue;
+            }
+            removeById(record.getId());
+            count++;
+        }
+        if (count > 0) {
+            log.info("回收站清理完成，共清理 {} 个过期文件", count);
+        }
+        return count;
+    }
+
     private Page<FileRecordVO> convertPage(Page<FileRecord> entityPage) {
         Page<FileRecordVO> voPage = new Page<>(entityPage.getCurrent(), entityPage.getSize(), entityPage.getTotal());
         List<FileRecordVO> voList = new ArrayList<>();

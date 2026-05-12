@@ -97,4 +97,11 @@ public interface FileService extends IService<FileRecord> {
      * @return 分页结果
      */
     Page<FileRecordVO> recycleList(int page, int size, Long userId);
+
+    /**
+     * 清理回收站中超过30天的过期文件（删除物理文件 + 数据库记录）。
+     *
+     * @return 清理的文件数量
+     */
+    int cleanExpiredRecycle();
 }
