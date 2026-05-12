@@ -3,6 +3,7 @@ package com.greendam.birdhelp.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.greendam.birdhelp.common.BaseResponse;
 import com.greendam.birdhelp.common.context.BaseContext;
+import com.greendam.birdhelp.model.entity.FileRecord;
 import com.greendam.birdhelp.model.vo.FileRecordVO;
 import com.greendam.birdhelp.service.FileService;
 import com.greendam.birdhelp.service.FileStorageService;
@@ -13,6 +14,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
@@ -54,23 +58,38 @@ public class FileController {
      * 下载文件。
      *
      * @param id 文件记录 ID
-     * @return 文件字节内容
      */
     @GetMapping("/{id}/download")
-    public byte[] download(@PathVariable Long id, javax.servlet.http.HttpServletResponse response) {
-        FileRecordVO vo = fileService.getFileRecord(id);
-        byte[] content = fileStorageService.load(
-                fileService.getById(id).getFileUrl());
+    public void download(@PathVariable Long id, HttpServletResponse response) throws IOException {
+        FileRecord record = fileService.getById(id);
+        if (record == null || record.getDeleted() == 1) {
+            response.setStatus(404);
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+            response.getWriter().write("{\"code\":40400,\"message\":\"文件不存在\"}");
+            return;
+        }
+
+        byte[] content = fileStorageService.load(record.getFileUrl());
         if (content == null) {
             response.setStatus(404);
-            return new byte[0];
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+            response.getWriter().write("{\"code\":40400,\"message\":\"文件不存在\"}");
+            return;
         }
-        String encodedName = URLEncoder.encode(vo.getFileName(), StandardCharsets.UTF_8)
+
+        String encodedName = URLEncoder.encode(record.getFileName(), StandardCharsets.UTF_8.name())
                 .replace("+", "%20");
         response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
                 "attachment; filename*=UTF-8''" + encodedName);
-        return content;
+        response.setContentLength(content.length);
+
+        try (OutputStream out = response.getOutputStream()) {
+            out.write(content);
+            out.flush();
+        }
     }
 
     /**

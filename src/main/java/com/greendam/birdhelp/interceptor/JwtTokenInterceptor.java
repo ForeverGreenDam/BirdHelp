@@ -1,19 +1,24 @@
 package com.greendam.birdhelp.interceptor;
 
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.greendam.birdhelp.common.BaseResponse;
 import com.greendam.birdhelp.common.context.BaseContext;
 import com.greendam.birdhelp.common.utils.JwtUtil;
 import com.greendam.birdhelp.constant.JwtClaimsConstant;
+import com.greendam.birdhelp.exception.ErrorCode;
 import com.greendam.birdhelp.properties.JwtProperties;
 import io.jsonwebtoken.Claims;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.nio.charset.StandardCharsets;
 
 /**
  * <p>
@@ -42,6 +47,9 @@ public class JwtTokenInterceptor implements HandlerInterceptor {
     @Autowired
     private JwtProperties jwtProperties;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     /**
      * <p>Controller 方法调用前执行，完成 JWT 校验和用户身份注入。</p>
      *
@@ -67,7 +75,18 @@ public class JwtTokenInterceptor implements HandlerInterceptor {
             BaseContext.setCurrentId(userId);
             return true;
         } catch (Exception ex) {
+            log.error("JWT校验失败: {}", ex.getMessage(), ex);
             response.setStatus(401);
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+            BaseResponse<?> errorResponse = BaseResponse.error(
+                    ErrorCode.NOT_LOGIN_ERROR.getCode(),
+                    "登录已过期，请重新登录");
+            try {
+                objectMapper.writeValue(response.getOutputStream(), errorResponse);
+            } catch (Exception writeEx) {
+                log.error("写入JWT错误响应失败", writeEx);
+            }
             return false;
         }
     }
