@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import javax.servlet.http.HttpServletResponse;
 import java.io.*;
 import java.nio.file.*;
 
@@ -52,6 +53,15 @@ public class FileStorageServiceImpl implements FileStorageService {
     }
 
     @Override
+    public void download(String fileUrl, HttpServletResponse response) throws IOException {
+        if (aliOssUtil != null) {
+            aliOssUtil.download(fileUrl, response);
+        } else {
+            downloadLocal(fileUrl, response);
+        }
+    }
+
+    @Override
     public void delete(String fileUrl) {
         if (aliOssUtil != null) {
             aliOssUtil.delete(java.util.Collections.singletonList(fileUrl));
@@ -84,6 +94,17 @@ public class FileStorageServiceImpl implements FileStorageService {
         } catch (IOException e) {
             log.error("读取本地文件失败: {}", fileUrl, e);
             return null;
+        }
+    }
+
+    private void downloadLocal(String fileUrl, HttpServletResponse response) throws IOException {
+        Path path = Paths.get(fileUrl);
+        if (!Files.exists(path)) {
+            throw new FileNotFoundException("文件不存在: " + fileUrl);
+        }
+        try (OutputStream out = response.getOutputStream()) {
+            Files.copy(path, out);
+            out.flush();
         }
     }
 

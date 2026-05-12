@@ -1,8 +1,10 @@
 package com.greendam.birdhelp.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.greendam.birdhelp.common.BaseResponse;
 import com.greendam.birdhelp.common.context.BaseContext;
+import com.greendam.birdhelp.exception.ErrorCode;
 import com.greendam.birdhelp.model.entity.FileRecord;
 import com.greendam.birdhelp.model.vo.FileRecordVO;
 import com.greendam.birdhelp.service.FileService;
@@ -15,8 +17,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletResponse;
+import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
@@ -41,6 +43,9 @@ public class FileController {
     @Resource
     private FileStorageService fileStorageService;
 
+    @Resource
+    private ObjectMapper objectMapper;
+
     /**
      * 上传文件。
      *
@@ -55,7 +60,7 @@ public class FileController {
     }
 
     /**
-     * 下载文件。
+     * 下载文件（流式传输，不经过 byte[] 中转）。
      *
      * @param id 文件记录 ID
      */
@@ -63,19 +68,7 @@ public class FileController {
     public void download(@PathVariable Long id, HttpServletResponse response) throws IOException {
         FileRecord record = fileService.getById(id);
         if (record == null || record.getDeleted() == 1) {
-            response.setStatus(404);
-            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-            response.getWriter().write("{\"code\":40400,\"message\":\"文件不存在\"}");
-            return;
-        }
-
-        byte[] content = fileStorageService.load(record.getFileUrl());
-        if (content == null) {
-            response.setStatus(404);
-            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-            response.getWriter().write("{\"code\":40400,\"message\":\"文件不存在\"}");
+            writeError(response, 404, BaseResponse.error(ErrorCode.NOT_FOUND_ERROR));
             return;
         }
 
@@ -83,13 +76,20 @@ public class FileController {
                 .replace("+", "%20");
         response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
-                "attachment; filename*=UTF-8''" + encodedName);
-        response.setContentLength(content.length);
+                "attachment; filename=\"" + encodedName + "\"; filename*=UTF-8''" + encodedName);
 
-        try (OutputStream out = response.getOutputStream()) {
-            out.write(content);
-            out.flush();
+        try {
+            fileStorageService.download(record.getFileUrl(), response);
+        } catch (FileNotFoundException e) {
+            writeError(response, 404, BaseResponse.error(ErrorCode.NOT_FOUND_ERROR));
         }
+    }
+
+    private void writeError(HttpServletResponse response, int status, BaseResponse<?> body) throws IOException {
+        response.setStatus(status);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        objectMapper.writeValue(response.getOutputStream(), body);
     }
 
     /**

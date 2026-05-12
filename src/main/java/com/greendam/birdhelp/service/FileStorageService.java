@@ -1,6 +1,7 @@
 package com.greendam.birdhelp.service;
 
-import java.io.InputStream;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 
 /**
  * <p>
@@ -27,6 +28,15 @@ public interface FileStorageService {
      * @return 文件字节内容，不存在时返回 {@code null}
      */
     byte[] load(String fileUrl);
+
+    /**
+     * 下载文件并直接写入 HTTP 响应输出流（流式传输，不占用内存）。
+     *
+     * @param fileUrl  文件的存储 URL 或路径
+     * @param response HTTP 响应
+     * @throws IOException 当文件不存在或读取失败时抛出
+     */
+    void download(String fileUrl, HttpServletResponse response) throws IOException;
 
     /**
      * 删除存储的文件。
