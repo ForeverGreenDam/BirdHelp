@@ -54,6 +54,11 @@ public class FileRecord extends BaseEntity {
     private Long userId;
 
     /**
+     * 项目 ID，关联 {@code project.id}。
+     */
+    private Long projectId;
+
+    /**
      * 原始文件名（含扩展名）。
      */
     private String fileName;

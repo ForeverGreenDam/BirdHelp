@@ -2,6 +2,7 @@
 CREATE TABLE `file_record` (
     `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
     `user_id` bigint NOT NULL COMMENT '用户ID',
+    `project_id` bigint NOT NULL COMMENT '所属项目ID',
     `file_name` varchar(255) NOT NULL COMMENT '原始文件名',
     `file_type` tinyint NOT NULL COMMENT '文件类型 1-PPT 2-Word 3-PDF 4-图片 5-其他',
     `file_size` bigint NOT NULL DEFAULT 0 COMMENT '文件大小（字节）',
@@ -16,6 +17,7 @@ CREATE TABLE `file_record` (
     `del_flag` tinyint DEFAULT 0 COMMENT '逻辑删除 0-未删除 1-已删除',
     PRIMARY KEY (`id`),
     KEY `idx_user_id` (`user_id`),
+    KEY `idx_project_id` (`project_id`),
     KEY `idx_file_type` (`file_type`),
     KEY `idx_deleted` (`deleted`),
     KEY `idx_deleted_at` (`deleted_at`)

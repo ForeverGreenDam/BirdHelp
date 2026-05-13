@@ -19,6 +19,9 @@ public class FileRecordVO {
     /** 文件记录 ID */
     private Long id;
 
+    /** 所属项目 ID */
+    private Long projectId;
+
     /** 原始文件名 */
     private String fileName;
 

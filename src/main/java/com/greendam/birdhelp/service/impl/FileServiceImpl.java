@@ -237,6 +237,7 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
     private FileRecordVO toVO(FileRecord record) {
         return FileRecordVO.builder()
                 .id(record.getId())
+                .projectId(record.getProjectId())
                 .fileName(record.getFileName())
                 .fileType(record.getFileType())
                 .fileSize(record.getFileSize())
