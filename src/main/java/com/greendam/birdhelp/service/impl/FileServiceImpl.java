@@ -3,6 +3,7 @@ package com.greendam.birdhelp.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.greendam.birdhelp.common.utils.AiModuleCaller;
 import com.greendam.birdhelp.exception.BusinessException;
 import com.greendam.birdhelp.exception.ErrorCode;
 import com.greendam.birdhelp.mapper.FileRecordMapper;
@@ -41,6 +42,9 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
 
     @Resource
     private FileStorageService fileStorageService;
+
+    @Resource
+    private AiModuleCaller aiModuleCaller;
 
     /** 回收站保留天数 */
     private static final int RECYCLE_DAYS = 30;
@@ -134,6 +138,9 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
         record.setDeletedAt(LocalDateTime.now());
         updateById(record);
         log.info("文件移入回收站: id={}, userId={}", id, userId);
+
+        // 通知 AI 模块删除素材向量
+        aiModuleCaller.deleteMaterial(id, userId, record.getProjectId());
     }
 
     @Override
@@ -146,14 +153,21 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
         record.setDeletedAt(null);
         updateById(record);
         log.info("从回收站恢复文件: id={}, userId={}", id, userId);
+
+        // 通知 AI 模块重建向量索引
+        aiModuleCaller.reindexMaterial(id, userId, record.getProjectId(), record.getFileName());
     }
 
     @Override
     public void permanentDelete(Long id, Long userId) {
         FileRecord record = getOwnRecord(id, userId);
+        Long projectId = record.getProjectId();
         fileStorageService.delete(record.getFileUrl());
         removeById(id);
         log.info("永久删除文件: id={}, userId={}", id, userId);
+
+        // 通知 AI 模块清理残留向量
+        aiModuleCaller.purgeVector(id, userId, projectId);
     }
 
     @Override
@@ -193,6 +207,10 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
 
         log.info("文件上传成功: id={}, projectId={}, fileName={}, fileType={}, source={}",
                 record.getId(), projectId, originalName, fileType, source);
+
+        // 通知 AI 模块上传素材并触发 RAG 摄取
+        aiModuleCaller.uploadMaterial(content, originalName, userId, projectId, record.getId());
+
         return toVO(record);
     }
 

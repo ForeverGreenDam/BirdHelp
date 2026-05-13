@@ -53,6 +53,9 @@ jwt:
 internal-api:
   public-key: ${internal-api.public-key}
   timestamp-window: 300
+ai-module:
+  base-url: ${ai-module.base-url}
+  private-key: ${ai-module.private-key}
 
 app:
   upload-dir: ./upload
