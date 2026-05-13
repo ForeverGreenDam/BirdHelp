@@ -396,9 +396,10 @@ Java 后端（本工程）                  AI 模块（另建工程）
 |------|------|------|
 | POST | /internal/quota/consume | AI 生成前扣减额度 |
 | POST | /internal/quota/refund | 生成失败退还额度 |
-| POST | /internal/file/upload | AI 模块上传生成结果文件 / 保存素材文件（Body 含 project_id） |
+| POST | /internal/file/upload | AI 模块上传文件（素材 / 生成结果，Body 含 project_id） |
+| GET | /internal/file/{id}/download | AI 模块下载文件（向量化等处理用） |
 | GET | /internal/file/list | AI 模块代理查询文件列表（Query 含 project_id） |
-| DELETE | /internal/file/{id} | AI 模块触发软删除文件，移入回收站 |
+| DELETE | /internal/file/{id} | AI 模块软删除文件，移入回收站（Query 含 userId） |
 
 ### 7.4 Java 后端调用 AI 模块的内部接口
 
