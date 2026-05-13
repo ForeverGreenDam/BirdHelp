@@ -76,17 +76,17 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
     // ==================== 公开方法 ====================
 
     @Override
-    public FileRecordVO upload(MultipartFile file, Long userId) {
+    public FileRecordVO upload(MultipartFile file, Long projectId, Long userId) {
         try {
-            return doUpload(file.getBytes(), file.getOriginalFilename(), userId, 1);
+            return doUpload(file.getBytes(), file.getOriginalFilename(), projectId, userId, 1);
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "文件读取失败");
         }
     }
 
     @Override
-    public FileRecordVO uploadByAi(byte[] content, String fileName, Long userId) {
-        return doUpload(content, fileName, userId, 2);
+    public FileRecordVO uploadByAi(byte[] content, String fileName, Long projectId, Long userId) {
+        return doUpload(content, fileName, projectId, userId, 2);
     }
 
     @Override
@@ -99,9 +99,10 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
     }
 
     @Override
-    public Page<FileRecordVO> listFiles(int page, int size, Integer fileType, Long userId) {
+    public Page<FileRecordVO> listFiles(int page, int size, Integer fileType, Long projectId, Long userId) {
         LambdaQueryWrapper<FileRecord> wrapper = new LambdaQueryWrapper<FileRecord>()
                 .eq(FileRecord::getUserId, userId)
+                .eq(FileRecord::getProjectId, projectId)
                 .eq(FileRecord::getDeleted, 0)
                 .eq(fileType != null, FileRecord::getFileType, fileType)
                 .orderByDesc(FileRecord::getCreateTime);
@@ -111,9 +112,10 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
     }
 
     @Override
-    public Page<FileRecordVO> searchFiles(String keyword, int page, int size, Long userId) {
+    public Page<FileRecordVO> searchFiles(String keyword, int page, int size, Long projectId, Long userId) {
         LambdaQueryWrapper<FileRecord> wrapper = new LambdaQueryWrapper<FileRecord>()
                 .eq(FileRecord::getUserId, userId)
+                .eq(FileRecord::getProjectId, projectId)
                 .eq(FileRecord::getDeleted, 0)
                 .like(FileRecord::getFileName, keyword)
                 .orderByDesc(FileRecord::getCreateTime);
@@ -155,9 +157,10 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
     }
 
     @Override
-    public Page<FileRecordVO> recycleList(int page, int size, Long userId) {
+    public Page<FileRecordVO> recycleList(int page, int size, Long projectId, Long userId) {
         LambdaQueryWrapper<FileRecord> wrapper = new LambdaQueryWrapper<FileRecord>()
                 .eq(FileRecord::getUserId, userId)
+                .eq(FileRecord::getProjectId, projectId)
                 .eq(FileRecord::getDeleted, 1)
                 .orderByDesc(FileRecord::getDeletedAt);
 
@@ -170,15 +173,16 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
     /**
      * 核心上传逻辑：保存文件到存储 → 插入数据库记录。
      */
-    private FileRecordVO doUpload(byte[] content, String originalName, Long userId, int source) {
+    private FileRecordVO doUpload(byte[] content, String originalName, Long projectId, Long userId, int source) {
         String ext = extractExt(originalName);
         int fileType = resolveFileType(ext);
-        String objectName = buildObjectName(fileType, ext);
+        String objectName = buildObjectName(projectId, fileType, ext);
 
         String fileUrl = fileStorageService.store(content, objectName);
 
         FileRecord record = new FileRecord();
         record.setUserId(userId);
+        record.setProjectId(projectId);
         record.setFileName(originalName);
         record.setFileType(fileType);
         record.setFileSize((long) content.length);
@@ -187,8 +191,8 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
         record.setDeleted(0);
         save(record);
 
-        log.info("文件上传成功: id={}, fileName={}, fileType={}, source={}",
-                record.getId(), originalName, fileType, source);
+        log.info("文件上传成功: id={}, projectId={}, fileName={}, fileType={}, source={}",
+                record.getId(), projectId, originalName, fileType, source);
         return toVO(record);
     }
 
@@ -225,13 +229,13 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
     }
 
     /**
-     * 构建存储对象名：{type_dir}/{yyyy-MM}/{uuid}.{ext}
+     * 构建存储对象名：{project_id}/{type_dir}/{yyyy-MM}/{uuid}.{ext}
      */
-    private String buildObjectName(int fileType, String ext) {
+    private String buildObjectName(Long projectId, int fileType, String ext) {
         String typeDir = TYPE_DIR_MAP.getOrDefault(fileType, "other");
         String month = LocalDateTime.now().format(MONTH_FMT);
         String uuid = UUID.randomUUID().toString().replace("-", "");
-        return typeDir + "/" + month + "/" + uuid + "." + ext;
+        return projectId + "/" + typeDir + "/" + month + "/" + uuid + "." + ext;
     }
 
     private FileRecordVO toVO(FileRecord record) {

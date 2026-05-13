@@ -21,6 +21,12 @@ public class FileInternalUploadDTO {
     private Long userId;
 
     /**
+     * 项目 ID，不可为空。
+     */
+    @NotNull(message = "项目ID不能为空")
+    private Long projectId;
+
+    /**
      * 原始文件名（含扩展名），不可为空。
      */
     @NotNull(message = "文件名不能为空")

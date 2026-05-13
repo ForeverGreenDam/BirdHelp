@@ -53,9 +53,10 @@ public class FileController {
      * @return 文件记录视图
      */
     @PostMapping("/upload")
-    public BaseResponse<FileRecordVO> upload(@RequestParam("file") MultipartFile file) {
+    public BaseResponse<FileRecordVO> upload(@RequestParam("file") MultipartFile file,
+                                             @RequestParam Long projectId) {
         Long userId = BaseContext.getCurrentId();
-        FileRecordVO vo = fileService.upload(file, userId);
+        FileRecordVO vo = fileService.upload(file, projectId, userId);
         return BaseResponse.success(vo);
     }
 
@@ -104,9 +105,10 @@ public class FileController {
     public BaseResponse<Page<FileRecordVO>> list(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) Integer fileType) {
+            @RequestParam(required = false) Integer fileType,
+            @RequestParam Long projectId) {
         Long userId = BaseContext.getCurrentId();
-        Page<FileRecordVO> result = fileService.listFiles(page, size, fileType, userId);
+        Page<FileRecordVO> result = fileService.listFiles(page, size, fileType, projectId, userId);
         return BaseResponse.success(result);
     }
 
@@ -122,9 +124,10 @@ public class FileController {
     public BaseResponse<Page<FileRecordVO>> search(
             @RequestParam String keyword,
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam Long projectId) {
         Long userId = BaseContext.getCurrentId();
-        Page<FileRecordVO> result = fileService.searchFiles(keyword, page, size, userId);
+        Page<FileRecordVO> result = fileService.searchFiles(keyword, page, size, projectId, userId);
         return BaseResponse.success(result);
     }
 
@@ -177,9 +180,10 @@ public class FileController {
     @GetMapping("/recycle")
     public BaseResponse<Page<FileRecordVO>> recycleList(
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam Long projectId) {
         Long userId = BaseContext.getCurrentId();
-        Page<FileRecordVO> result = fileService.recycleList(page, size, userId);
+        Page<FileRecordVO> result = fileService.recycleList(page, size, projectId, userId);
         return BaseResponse.success(result);
     }
 }

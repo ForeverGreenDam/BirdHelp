@@ -40,7 +40,7 @@ public class FileInternalController {
             @Valid FileInternalUploadDTO dto) {
         try {
             FileRecordVO vo = fileService.uploadByAi(file.getBytes(),
-                    dto.getFileName(), dto.getUserId());
+                    dto.getFileName(), dto.getProjectId(), dto.getUserId());
             return BaseResponse.success(vo);
         } catch (IOException e) {
             log.error("AI 模块文件上传失败", e);

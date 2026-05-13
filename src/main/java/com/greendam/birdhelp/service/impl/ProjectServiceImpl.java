@@ -65,9 +65,6 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project>
         // 级联将项目下所有正常文件移入回收站
         cascadeSoftDeleteFiles(id);
 
-        // 通知 AI 模块清理向量数据
-        notifyAiCleanVectors(id);
-
         // 逻辑删除项目
         removeById(id);
         log.info("项目删除成功: id={}, name={}, userId={}", id, project.getName(), userId);
@@ -171,14 +168,6 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project>
         log.info("级联回收项目文件完成: projectId={}", projectId);
     }
 
-    /**
-     * 通知 AI 模块清理该项目关联的 Redis 向量数据。
-     * 当前 AI 模块尚未就绪，仅记录日志；后续接入 HTTP 调用。
-     */
-    private void notifyAiCleanVectors(Long projectId) {
-        // TODO: 通过 HTTP 调用 AI 模块 POST /ai/internal/project/delete
-        log.info("通知 AI 模块清理向量: projectId={}（当前为占位实现，AI 模块就绪后接入）", projectId);
-    }
 
     private ProjectVO toVO(Project project) {
         return ProjectVO.builder()
