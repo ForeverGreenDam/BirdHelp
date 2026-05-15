@@ -26,3 +26,7 @@ CREATE TABLE `sys_user` (
                             UNIQUE KEY `uk_phone` (`phone`),
                             UNIQUE KEY `uk_email` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户信息表';
+ALTER TABLE sys_user
+    MODIFY email varchar(100) DEFAULT NULL COMMENT '邮箱';
+ALTER TABLE sys_user
+    MODIFY phone varchar(20) DEFAULT NULL COMMENT '手机号';

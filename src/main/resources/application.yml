@@ -16,6 +16,7 @@ spring:
     host: ${redis.host}
     port: ${redis.port}
     database: ${redis.database}
+    password: ${redis.password}
 
 
 mybatis-plus:
