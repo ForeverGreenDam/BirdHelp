@@ -1,5 +1,10 @@
 package com.greendam.birdhelp.common.utils;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.greendam.birdhelp.exception.BusinessException;
+import com.greendam.birdhelp.exception.ErrorCode;
+import com.greendam.birdhelp.model.vo.PptGenerateResultVO;
 import com.greendam.birdhelp.properties.AiModuleProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -32,6 +37,9 @@ public class AiModuleCaller {
 
     @Resource
     private AiModuleProperties aiModuleProperties;
+
+    @Resource
+    private ObjectMapper objectMapper;
 
     private PrivateKey privateKey;
     private String baseUrl;
@@ -109,6 +117,66 @@ public class AiModuleCaller {
             log.info("AI 向量重建完成: materialId={}, status={}, body={}", materialId, resp.statusCode(), resp.body());
         } catch (Exception e) {
             log.error("AI 向量重建失败: materialId={}, userId={}, projectId={}", materialId, userId, projectId, e);
+        }
+    }
+
+    /**
+     * 调用 AI 模块生成 PPT（同步，阻塞 20–60 秒）。
+     *
+     * @return PPT 生成结果（文件 ID、URL、文件名）
+     * @throws BusinessException AI 模块返回错误或网络异常时抛出
+     */
+    public PptGenerateResultVO generatePpt(String userId, String projectId, String topic,
+                                           String language, String style, Integer slideCount,
+                                           String extraPrompt, java.util.List<String> materialIds,
+                                           Boolean ragEnabled, String callbackId) {
+        if (!isReady()) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "AI 模块未配置，无法生成 PPT");
+        }
+        try {
+            java.util.Map<String, Object> bodyMap = new java.util.LinkedHashMap<>();
+            bodyMap.put("user_id", userId);
+            bodyMap.put("project_id", projectId);
+            bodyMap.put("topic", topic);
+            bodyMap.put("language", language != null ? language : "zh");
+            bodyMap.put("style", style != null ? style : "academic");
+            bodyMap.put("slide_count", slideCount != null ? slideCount : 10);
+            bodyMap.put("extra_prompt", extraPrompt != null ? extraPrompt : "");
+            bodyMap.put("material_ids", materialIds != null ? materialIds : java.util.List.of());
+            bodyMap.put("rag_enabled", ragEnabled != null ? ragEnabled : false);
+            bodyMap.put("callback_id", callbackId);
+
+            String jsonBody = objectMapper.writeValueAsString(bodyMap);
+            java.net.http.HttpResponse<String> resp = signedJsonRequest("POST", "/ai/ppt/generate", jsonBody);
+
+            log.info("AI PPT 生成完成: status={}", resp.statusCode());
+
+            java.util.Map<String, Object> respMap = objectMapper.readValue(
+                    resp.body(), new TypeReference<java.util.Map<String, Object>>() {
+                    });
+
+            int code = ((Number) respMap.get("code")).intValue();
+            if (code != 0) {
+                String message = (String) respMap.getOrDefault("message", "AI 模块未知错误");
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "PPT 生成失败: " + message);
+            }
+
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> data = (java.util.Map<String, Object>) respMap.get("data");
+            if (data == null) {
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "PPT 生成返回数据为空");
+            }
+
+            return PptGenerateResultVO.builder()
+                    .fileId(Long.valueOf(String.valueOf(data.get("file_id"))))
+                    .fileUrl((String) data.get("file_url"))
+                    .fileName((String) data.get("file_name"))
+                    .build();
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("AI PPT 生成失败: userId={}, projectId={}, topic={}", userId, projectId, topic, e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "PPT 生成请求失败，请稍后重试");
         }
     }
 
