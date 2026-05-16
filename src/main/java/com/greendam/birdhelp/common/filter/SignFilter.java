@@ -90,7 +90,7 @@ public class SignFilter implements Filter {
     }
 
     /**
-     * 验证请求签名。
+     * 验证请求签名（字节级，直接对原始字节验签，避免 UTF-8 编解码差异）。
      */
     private void verifySign(CachedBodyHttpServletRequestWrapper request) throws SignVerifyException {
         String timestamp = request.getHeader("X-Timestamp");
@@ -117,14 +117,24 @@ public class SignFilter implements Filter {
             throw new SignVerifyException("请求已过期或时间偏差过大: " + (now - ts) / 1000 + "s");
         }
 
-        String body = request.getBodyAsString();
-        String signString = request.getMethod().toUpperCase() + "\n"
-                + request.getRequestURI() + "\n"
-                + body + "\n"
-                + timestamp + "\n"
-                + nonce;
+        // 直接用原始字节构造签名字节串，避免 binary → UTF-8 String 编解码差异
+        byte[] bodyBytes = request.getCachedBody();
+        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        try {
+            buf.write(request.getMethod().toUpperCase().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            buf.write('\n');
+            buf.write(request.getRequestURI().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            buf.write('\n');
+            buf.write(bodyBytes);
+            buf.write('\n');
+            buf.write(timestamp.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            buf.write('\n');
+            buf.write(nonce.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (java.io.IOException e) {
+            throw new SignVerifyException("构造签名字节串失败");
+        }
 
-        if (!RsaSignUtil.verify(signString, signature, publicKey)) {
+        if (!RsaSignUtil.verifyRaw(buf.toByteArray(), signature, publicKey)) {
             throw new SignVerifyException("签名不匹配");
         }
     }

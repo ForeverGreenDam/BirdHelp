@@ -41,7 +41,7 @@ public class QuotaLog extends BaseEntity {
     private Integer changeType;
 
     /**
-     * 关联业务 ID（如生成任务 ID），可为空。
+     * 关联业务 ID（生成任务 callback_id），可为空。
      */
-    private Long relatedId;
+    private String relatedId;
 }

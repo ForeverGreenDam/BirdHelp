@@ -13,3 +13,5 @@ CREATE TABLE `quota_log` (
     KEY `idx_user_id` (`user_id`),
     KEY `idx_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='额度流水表';
+ALTER TABLE quota_log
+    MODIFY COLUMN related_id varchar(64) DEFAULT NULL COMMENT '关联业务ID（生成任务callback_id）';

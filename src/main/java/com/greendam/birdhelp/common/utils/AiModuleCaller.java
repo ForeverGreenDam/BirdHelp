@@ -184,16 +184,22 @@ public class AiModuleCaller {
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, "PPT 生成失败: " + message);
             }
 
+            // AI 模块的 data 内包装了 Java FileInternalController 返回的 BaseResponse<FileRecordVO>
             @SuppressWarnings("unchecked")
-            java.util.Map<String, Object> data = (java.util.Map<String, Object>) respMap.get("data");
-            if (data == null) {
+            java.util.Map<String, Object> javaResp = (java.util.Map<String, Object>) respMap.get("data");
+            if (javaResp == null) {
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, "PPT 生成返回数据为空");
+            }
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> fileRecord = (java.util.Map<String, Object>) javaResp.get("data");
+            if (fileRecord == null) {
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "PPT 生成返回文件信息为空");
             }
 
             return PptGenerateResultVO.builder()
-                    .fileId(Long.valueOf(String.valueOf(data.get("file_id"))))
-                    .fileUrl((String) data.get("file_url"))
-                    .fileName((String) data.get("file_name"))
+                    .fileId(Long.valueOf(String.valueOf(fileRecord.get("id"))))
+                    .fileUrl((String) fileRecord.get("fileUrl"))
+                    .fileName((String) fileRecord.get("fileName"))
                     .build();
         } catch (BusinessException e) {
             throw e;
@@ -259,15 +265,20 @@ public class AiModuleCaller {
             }
 
             @SuppressWarnings("unchecked")
-            java.util.Map<String, Object> data = (java.util.Map<String, Object>) respMap.get("data");
-            if (data == null) {
+            java.util.Map<String, Object> javaResp = (java.util.Map<String, Object>) respMap.get("data");
+            if (javaResp == null) {
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, "Word 生成返回数据为空");
+            }
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> fileRecord = (java.util.Map<String, Object>) javaResp.get("data");
+            if (fileRecord == null) {
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "Word 生成返回文件信息为空");
             }
 
             return WordGenerateResultVO.builder()
-                    .fileId(Long.valueOf(String.valueOf(data.get("file_id"))))
-                    .fileUrl((String) data.get("file_url"))
-                    .fileName((String) data.get("file_name"))
+                    .fileId(Long.valueOf(String.valueOf(fileRecord.get("id"))))
+                    .fileUrl((String) fileRecord.get("fileUrl"))
+                    .fileName((String) fileRecord.get("fileName"))
                     .build();
         } catch (BusinessException e) {
             throw e;
@@ -332,15 +343,20 @@ public class AiModuleCaller {
             }
 
             @SuppressWarnings("unchecked")
-            java.util.Map<String, Object> data = (java.util.Map<String, Object>) respMap.get("data");
-            if (data == null) {
+            java.util.Map<String, Object> javaResp = (java.util.Map<String, Object>) respMap.get("data");
+            if (javaResp == null) {
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, "PDF 生成返回数据为空");
+            }
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> fileRecord = (java.util.Map<String, Object>) javaResp.get("data");
+            if (fileRecord == null) {
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "PDF 生成返回文件信息为空");
             }
 
             return PdfGenerateResultVO.builder()
-                    .fileId(Long.valueOf(String.valueOf(data.get("file_id"))))
-                    .fileUrl((String) data.get("file_url"))
-                    .fileName((String) data.get("file_name"))
+                    .fileId(Long.valueOf(String.valueOf(fileRecord.get("id"))))
+                    .fileUrl((String) fileRecord.get("fileUrl"))
+                    .fileName((String) fileRecord.get("fileName"))
                     .build();
         } catch (BusinessException e) {
             throw e;

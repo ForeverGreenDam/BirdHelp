@@ -34,6 +34,11 @@ public class FileRecordVO {
     /** 文件来源：1-用户上传，2-AI生成 */
     private Integer source;
 
+    /**
+     * 文件存储路径或 OSS URL
+     */
+    private String fileUrl;
+
     /** 回收站标记：0-正常，1-回收站 */
     private Integer deleted;
 

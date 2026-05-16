@@ -102,7 +102,7 @@ public class QuotaServiceImpl extends ServiceImpl<UserQuotaMapper, UserQuota>
      * @throws BusinessException {@code QUOTA_EXCEEDED} — 当日额度已用完
      */
     @Override
-    public void consumeQuota(Long userId, Long relatedId) {
+    public void consumeQuota(Long userId, String relatedId) {
         String lockKey = LOCK_PREFIX + userId;
         Boolean locked = stringRedisTemplate.opsForValue()
                 .setIfAbsent(lockKey, "1", Duration.ofSeconds(LOCK_TIMEOUT));
@@ -125,7 +125,7 @@ public class QuotaServiceImpl extends ServiceImpl<UserQuotaMapper, UserQuota>
      * @param relatedId 关联业务 ID
      */
     @Override
-    public void refundQuota(Long userId, Long relatedId) {
+    public void refundQuota(Long userId, String relatedId) {
         String lockKey = LOCK_PREFIX + userId;
         Boolean locked = stringRedisTemplate.opsForValue()
                 .setIfAbsent(lockKey, "1", Duration.ofSeconds(LOCK_TIMEOUT));
@@ -144,7 +144,7 @@ public class QuotaServiceImpl extends ServiceImpl<UserQuotaMapper, UserQuota>
     /**
      * 执行额度扣减（无锁版本，由持有锁的调用方使用）。
      */
-    private void doConsume(Long userId, Long relatedId) {
+    private void doConsume(Long userId, String relatedId) {
         UserQuota quota = getOrCreateUserQuota(userId);
         resetIfCrossDay(quota);
 
@@ -166,7 +166,7 @@ public class QuotaServiceImpl extends ServiceImpl<UserQuotaMapper, UserQuota>
     /**
      * 执行额度退还（无锁版本，由持有锁的调用方使用）。
      */
-    private void doRefund(Long userId, Long relatedId) {
+    private void doRefund(Long userId, String relatedId) {
         UserQuota quota = getOrCreateUserQuota(userId);
 
         if (quota.getDailyUsed() > 0) {
@@ -251,7 +251,7 @@ public class QuotaServiceImpl extends ServiceImpl<UserQuotaMapper, UserQuota>
      * @param changeType 变更类型：1-扣减，2-退还
      * @param relatedId  关联业务 ID
      */
-    private void insertLog(Long userId, int changeType, Long relatedId) {
+    private void insertLog(Long userId, int changeType, String relatedId) {
         QuotaLog logEntry = new QuotaLog();
         logEntry.setUserId(userId);
         logEntry.setChangeType(changeType);

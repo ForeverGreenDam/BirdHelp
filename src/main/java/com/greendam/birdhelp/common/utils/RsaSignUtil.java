@@ -83,6 +83,25 @@ public class RsaSignUtil {
     }
 
     /**
+     * 使用公钥验证签名（字节级，直接对原始字节验签，避免 UTF-8 编解码差异）。
+     *
+     * @param data      原始字节
+     * @param sign      Base64 编码的签名
+     * @param publicKey 公钥
+     * @return {@code true} 验签通过，{@code false} 验签失败
+     */
+    public static boolean verifyRaw(byte[] data, String sign, PublicKey publicKey) {
+        try {
+            Signature signature = Signature.getInstance(ALGORITHM);
+            signature.initVerify(publicKey);
+            signature.update(data);
+            return signature.verify(Base64.getDecoder().decode(sign));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
      * 使用公钥验证签名。
      *
      * @param data      原始数据

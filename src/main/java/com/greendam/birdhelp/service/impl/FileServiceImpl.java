@@ -272,6 +272,7 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
                 .id(record.getId())
                 .projectId(record.getProjectId())
                 .fileName(record.getFileName())
+                .fileUrl(record.getFileUrl())
                 .fileType(record.getFileType())
                 .fileSize(record.getFileSize())
                 .source(record.getSource())

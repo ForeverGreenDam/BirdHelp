@@ -21,7 +21,7 @@ public class QuotaOperateDTO {
     private Long userId;
 
     /**
-     * 关联业务 ID（如生成任务 ID），用于流水记录。
+     * 关联业务 ID（生成任务 callback_id），用于流水记录。
      */
-    private Long relatedId;
+    private String relatedId;
 }

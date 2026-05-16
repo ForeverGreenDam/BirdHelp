@@ -36,13 +36,13 @@ public interface QuotaService extends IService<UserQuota> {
      * 校验额度未超限后扣减并记录流水。</p>
      *
      * @param userId    用户 ID
-     * @param relatedId 关联业务 ID（生成任务 ID），可为空
+     * @param relatedId 关联业务 ID（生成任务 callback_id），可为空
      * @throws com.greendam.birdhelp.exception.BusinessException 错误码：
      *         <ul>
      *           <li>{@code QUOTA_EXCEEDED(40009)} — 当日额度已用完</li>
      *         </ul>
      */
-    void consumeQuota(Long userId, Long relatedId);
+    void consumeQuota(Long userId, String relatedId);
 
     /**
      * <p>退还一次额度。</p>
@@ -50,7 +50,7 @@ public interface QuotaService extends IService<UserQuota> {
      * <p>由 AI 模块在生成失败时调用。将 {@code daily_used} 回退 1 次（最低为 0），并记录流水。</p>
      *
      * @param userId    用户 ID
-     * @param relatedId 关联业务 ID（生成任务 ID），可为空
+     * @param relatedId 关联业务 ID（生成任务 callback_id），可为空
      */
-    void refundQuota(Long userId, Long relatedId);
+    void refundQuota(Long userId, String relatedId);
 }
