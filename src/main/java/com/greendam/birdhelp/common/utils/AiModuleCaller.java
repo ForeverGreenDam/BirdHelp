@@ -18,6 +18,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Map;
 import java.util.UUID;
 
@@ -43,6 +44,7 @@ public class AiModuleCaller {
 
     private PrivateKey privateKey;
     private String baseUrl;
+    private HttpClient httpClient;
 
     private static String urlEncode(String value) {
         return java.net.URLEncoder.encode(value, StandardCharsets.UTF_8);
@@ -53,6 +55,9 @@ public class AiModuleCaller {
     @PostConstruct
     public void init() {
         this.baseUrl = aiModuleProperties.getBaseUrl();
+        this.httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .build();
         if (aiModuleProperties.getPrivateKey() != null && !aiModuleProperties.getPrivateKey().isBlank()) {
             this.privateKey = RsaSignUtil.loadPrivateKey(aiModuleProperties.getPrivateKey());
             log.info("AI 模块调用客户端已初始化: baseUrl={}", baseUrl);
@@ -149,15 +154,31 @@ public class AiModuleCaller {
             String jsonBody = objectMapper.writeValueAsString(bodyMap);
             java.net.http.HttpResponse<String> resp = signedJsonRequest("POST", "/ai/ppt/generate", jsonBody);
 
-            log.info("AI PPT 生成完成: status={}", resp.statusCode());
+            String respBody = resp.body();
+            log.info("AI PPT 生成完成: status={}, body={}", resp.statusCode(), respBody);
 
             java.util.Map<String, Object> respMap = objectMapper.readValue(
-                    resp.body(), new TypeReference<java.util.Map<String, Object>>() {
+                    respBody, new TypeReference<java.util.Map<String, Object>>() {
                     });
 
-            int code = ((Number) respMap.get("code")).intValue();
+            // FastAPI 的 401/422 等错误使用 {"detail": ...} 格式
+            int code = respMap.containsKey("code")
+                    ? ((Number) respMap.get("code")).intValue()
+                    : resp.statusCode();
+
             if (code != 0) {
                 String message = (String) respMap.getOrDefault("message", "AI 模块未知错误");
+                // 尝试从 FastAPI detail 字段提取错误消息
+                if (respMap.containsKey("detail")) {
+                    Object detail = respMap.get("detail");
+                    if (detail instanceof java.util.Map) {
+                        @SuppressWarnings("unchecked")
+                        java.util.Map<String, Object> detailMap = (java.util.Map<String, Object>) detail;
+                        message = (String) detailMap.getOrDefault("message", message);
+                    } else {
+                        message = String.valueOf(detail);
+                    }
+                }
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, "PPT 生成失败: " + message);
             }
 
@@ -212,7 +233,7 @@ public class AiModuleCaller {
                 .method(method, HttpRequest.BodyPublishers.ofString(jsonBody))
                 .build();
 
-        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> signedNoBodyRequest(String method, String path) throws Exception {
@@ -235,7 +256,7 @@ public class AiModuleCaller {
             request = builder.GET().build();
         }
 
-        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> signedMultipartRequest(
@@ -266,8 +287,7 @@ public class AiModuleCaller {
 
         String timestamp = String.valueOf(Instant.now().toEpochMilli());
         String nonce = UUID.randomUUID().toString();
-        String bodyStr = new String(bodyBytes, StandardCharsets.UTF_8);
-        String signature = sign("POST", path, bodyStr, timestamp, nonce);
+        String signature = signRaw("POST", path, bodyBytes, timestamp, nonce);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + path))
@@ -278,7 +298,33 @@ public class AiModuleCaller {
                 .POST(HttpRequest.BodyPublishers.ofByteArray(bodyBytes))
                 .build();
 
-        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    /**
+     * 对原始字节 body 签名（用于 multipart，避免 binary → UTF-8 String 编解码差异）。
+     */
+    private String signRaw(String method, String path, byte[] bodyBytes, String timestamp, String nonce) {
+        try {
+            java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+            buf.write(method.toUpperCase().getBytes(StandardCharsets.UTF_8));
+            buf.write('\n');
+            buf.write(path.getBytes(StandardCharsets.UTF_8));
+            buf.write('\n');
+            buf.write(bodyBytes);
+            buf.write('\n');
+            buf.write(timestamp.getBytes(StandardCharsets.UTF_8));
+            buf.write('\n');
+            buf.write(nonce.getBytes(StandardCharsets.UTF_8));
+            byte[] signBytes = buf.toByteArray();
+
+            java.security.Signature signer = java.security.Signature.getInstance("SHA256withRSA");
+            signer.initSign(privateKey);
+            signer.update(signBytes);
+            return Base64.getEncoder().encodeToString(signer.sign());
+        } catch (Exception e) {
+            throw new RuntimeException("RSA 签名失败", e);
+        }
     }
 
     private String sign(String method, String path, String body, String timestamp, String nonce) {
