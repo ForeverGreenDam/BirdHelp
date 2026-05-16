@@ -158,8 +158,8 @@ public class AiModuleCaller {
 
         HttpRequest request = switch (method) {
             case "DELETE" -> builder.DELETE().build();
-            case "POST" -> builder.POST(HttpRequest.BodyPublishers.noBody()).build();
-            default -> builder.GET().build();
+            case "POST"   -> builder.POST(HttpRequest.BodyPublishers.noBody()).build();
+            default       -> builder.GET().build();
         };
 
         return HttpClient.newHttpClient()
@@ -235,6 +235,7 @@ public class AiModuleCaller {
 | DELETE | `/ai/material/{id}`              | —                     | 删除素材（Java 软删除 + 向量清理） |
 | POST   | `/ai/material/{id}/reindex`      | —                     | 回收站恢复后重建向量索引          |
 | POST   | `/ai/material/{id}/vector-purge` | —                     | 强制删除后清理残留向量           |
+| POST   | `/ai/ppt/generate`               | `application/json`    | 生成 PPT 文档（支持 RAG 增强）  |
 
 ### 5.2 统一响应格式
 
@@ -244,9 +245,7 @@ public class AiModuleCaller {
 {
   "code": 0,
   "message": "success",
-  "data": {
-    ...
-  }
+  "data": { ... }
 }
 ```
 
@@ -275,8 +274,8 @@ public class AiModuleCaller {
 byte[] fileContent = Files.readAllBytes(Path.of("material.pdf"));
 var fields = Map.of("userId", "1", "projectId", "5", "javaFileId", "42");
 HttpResponse<String> resp = AiModuleCaller.signedMultipartRequest(
-        "/ai/material/upload", fields,
-        "file", "material.pdf", fileContent, "application/octet-stream"
+    "/ai/material/upload", fields,
+    "file", "material.pdf", fileContent, "application/octet-stream"
 );
 ```
 
@@ -297,11 +296,7 @@ HttpResponse<String> resp = AiModuleCaller.signedMultipartRequest(
 格式不支持：
 
 ```json
-{
-  "code": 1003,
-  "message": "不支持的格式: .xlsx，支持: .pdf, .docx, .pptx, .txt",
-  "data": null
-}
+{"code": 1003, "message": "不支持的格式: .xlsx，支持: .pdf, .docx, .pptx, .txt", "data": null}
 ```
 
 支持的扩展名：`.pdf` `.docx` `.pptx` `.txt`
@@ -318,20 +313,14 @@ HttpResponse<String> resp = AiModuleCaller.signedMultipartRequest(
 
 ```java
 HttpResponse<String> resp = AiModuleCaller.signedNoBodyRequest(
-        "DELETE", "/ai/material/42?userId=1&projectId=5"
+    "DELETE", "/ai/material/42?userId=1&projectId=5"
 );
 ```
 
 成功响应：
 
 ```json
-{
-  "code": 0,
-  "message": "success",
-  "data": {
-    "deleted_chunks": 35
-  }
-}
+{"code": 0, "message": "success", "data": {"deleted_chunks": 35}}
 ```
 
 ### 5.5 POST /ai/material/{id}/reindex — 回收站恢复后重建向量索引
@@ -349,7 +338,7 @@ Java 端在用户从回收站恢复文件后调用，AI 模块从 Java 重新下
 
 ```java
 HttpResponse<String> resp = AiModuleCaller.signedNoBodyRequest(
-        "POST", "/ai/material/42/reindex?userId=1&projectId=5&fileName=material.pdf"
+    "POST", "/ai/material/42/reindex?userId=1&projectId=5&fileName=material.pdf"
 );
 ```
 
@@ -370,11 +359,7 @@ HttpResponse<String> resp = AiModuleCaller.signedNoBodyRequest(
 解析失败：
 
 ```json
-{
-  "code": 3003,
-  "message": "素材摄取失败",
-  "data": null
-}
+{"code": 3003, "message": "素材摄取失败", "data": null}
 ```
 
 ### 5.6 POST /ai/material/{id}/vector-purge — 强制删除后清理残留向量
@@ -382,7 +367,6 @@ HttpResponse<String> resp = AiModuleCaller.signedNoBodyRequest(
 > 无 Body，签名字符串中 BODY = `""`。
 
 Java 端在以下场景调用：
-
 - 用户在回收站点击"永久删除"
 - 回收站超时 30 天自动清理
 - Java 侧直接删除文件记录
@@ -395,51 +379,131 @@ Java 端在以下场景调用：
 
 ```java
 HttpResponse<String> resp = AiModuleCaller.signedNoBodyRequest(
-        "POST", "/ai/material/42/vector-purge?userId=1&projectId=5"
+    "POST", "/ai/material/42/vector-purge?userId=1&projectId=5"
 );
 ```
 
 成功响应：
 
 ```json
+{"code": 0, "message": "success", "data": {"deleted_chunks": 35}}
+```
+
+### 5.7 POST /ai/ppt/generate — 生成 PPT 文档
+
+> JSON 请求。**同步接口**，请求会阻塞 20–60 秒直到生成完成。
+
+**调用流程：** Java 后端收到前端 PPT 生成请求 → 转发到本接口 → AI 模块执行生成（RAG 检索 → LLM 大纲生成 → python-pptx
+构建） → 上传文件到 Java 存储 → 返回结果。
+
+| 字段             | 类型        | 必填 | 说明                                                              |
+|----------------|-----------|----|-----------------------------------------------------------------|
+| `user_id`      | str       | 是  | 用户 ID                                                           |
+| `project_id`   | str       | 是  | 项目 ID，用于知识库隔离                                                   |
+| `topic`        | str       | 是  | PPT 主题，如 `"Java基础语法教学"`                                         |
+| `language`     | str       | 否  | 语言：`zh`（中文）/ `en`（英文），默认 `zh`                                   |
+| `style`        | str       | 否  | 风格：`academic`（学术）/ `business`（商务）/ `creative`（创意），默认 `academic` |
+| `slide_count`  | int       | 否  | 幻灯片页数（含标题页和结束页），范围 1–50，默认 10                                   |
+| `extra_prompt` | str       | 否  | 用户补充指令，如 `"重点讲解 async/await 语法"`，默认空                            |
+| `material_ids` | list[str] | 否  | RAG 参考素材的 `javaFileId` 列表，默认空                                   |
+| `rag_enabled`  | bool      | 否  | 是否启用 RAG 检索增强，默认 `false`                                        |
+| `callback_id`  | str       | 是  | 关联 Java 后端请求 ID，用于额度退还时追溯                                       |
+
+```java
+String jsonBody = """
+{
+  "user_id": "1",
+  "project_id": "5",
+  "topic": "Java基础语法教学",
+  "language": "zh",
+  "style": "academic",
+  "slide_count": 10,
+  "extra_prompt": "",
+  "material_ids": [],
+  "rag_enabled": false,
+  "callback_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+""";
+HttpResponse<String> resp = AiModuleCaller.signedJsonRequest("POST", "/ai/ppt/generate", jsonBody);
+```
+
+成功响应（生成完成并已上传到 Java 存储）：
+
+```json
 {
   "code": 0,
   "message": "success",
   "data": {
-    "deleted_chunks": 35
+    "file_id": 128,
+    "file_url": "https://storage.example.com/files/128.pptx",
+    "file_name": "Java基础语法教学.pptx"
   }
 }
 ```
 
-### 5.7 快速调用汇总
+> `data` 对象为 Java 后端文件上传接口 `POST /api/internal/file/upload` 的返回值，具体字段以 Java 端实际响应为准。
+
+**生成失败（大纲校验不通过，已达最大重试次数）：**
+
+```json
+{"code": 3001, "message": "大纲生成失败，已达最大重试次数", "data": null}
+```
+
+**额度不足：**
+
+```json
+{"code": 1001, "message": "额度不足，无法开始生成任务", "data": null}
+```
+
+**内部流程：**
+
+```
+1. AI 调 Java: POST /api/internal/quota/consume（扣额度）
+2. RAG 检索（若 rag_enabled=true）
+3. LLM 生成 PPT 大纲 JSON → 校验（title + slides ≥ 2）
+   └─ 失败: 重试（最多 3 次）→ 仍失败: 退额度 + 返回错误
+4. python-pptx 构建 .pptx 文件
+5. AI 调 Java: POST /api/internal/file/upload（上传文件）
+6. 返回上传结果给调用方
+```
+
+> **注意：** 本接口为同步模式，Java 端调用时需设置充足的 HTTP 超时（建议 ≥ 90 秒），避免 LLM 推理耗时导致超时。
+
+### 5.8 快速调用汇总
 
 ```java
 // 素材上传（Java 端先上传文件至存储拿到 fileId，再调用本接口传递已下载的文件）
 byte[] fileContent = Files.readAllBytes(Path.of("material.pdf"));
-AiModuleCaller.
-
-signedMultipartRequest(
+AiModuleCaller.signedMultipartRequest(
     "/ai/material/upload",
-    Map.of("userId", "1","projectId","5","javaFileId","42"),
-    "file","material.pdf",fileContent,"application/octet-stream"
-        );
+    Map.of("userId", "1", "projectId", "5", "javaFileId", "42"),
+    "file", "material.pdf", fileContent, "application/octet-stream"
+);
 
 // 素材删除
-        AiModuleCaller.
-
-signedNoBodyRequest("DELETE","/ai/material/42?userId=1&projectId=5");
+AiModuleCaller.signedNoBodyRequest("DELETE", "/ai/material/42?userId=1&projectId=5");
 
 // 回收站恢复 → 重建索引
-AiModuleCaller.
-
-signedNoBodyRequest("POST",
-                            "/ai/material/42/reindex?userId=1&projectId=5&fileName=material.pdf");
+AiModuleCaller.signedNoBodyRequest("POST",
+    "/ai/material/42/reindex?userId=1&projectId=5&fileName=material.pdf");
 
 // 强制删除 → 清理向量
-AiModuleCaller.
+AiModuleCaller.signedNoBodyRequest("POST",
+    "/ai/material/42/vector-purge?userId=1&projectId=5");
 
-signedNoBodyRequest("POST",
-                            "/ai/material/42/vector-purge?userId=1&projectId=5");
+// PPT 生成
+String pptBody = """
+{
+  "user_id": "1",
+  "project_id": "5",
+  "topic": "Java基础语法教学",
+  "style": "academic",
+  "slide_count": 10,
+  "rag_enabled": false,
+  "callback_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+""";
+AiModuleCaller.signedJsonRequest("POST", "/ai/ppt/generate", pptBody);
 ```
 
 ---
@@ -495,7 +559,8 @@ signedNoBodyRequest("POST",
 
 ## 八、AI 模块验签实现
 
-AI 模块侧通过 FastAPI 依赖项 `require_java_caller` 验签，已挂载到 `api/router.py` 的 `api_router` 上，所有 `/ai/*`路由自动受保护。
+AI 模块侧通过 FastAPI 依赖项 `require_java_caller` 验签，已挂载到 `api/router.py` 的 `api_router` 上，所有 `/ai/*`
+路由自动受保护。
 
 核心实现位于 `core/auth.py`：
 
@@ -610,8 +675,5 @@ GET /
 响应：
 
 ```json
-{
-  "status": "ok",
-  "app": "BirdHelp"
-}
+{"status": "ok", "app": "BirdHelp"}
 ```

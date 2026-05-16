@@ -4,7 +4,6 @@ import com.greendam.birdhelp.interceptor.JwtTokenInterceptor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
-import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import javax.annotation.Resource;
@@ -49,7 +48,7 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         log.info("开始注册自定义拦截器...");
         registry.addInterceptor(jwtTokenUserInterceptor)
-                .addPathPatterns("/user/**", "/quota/**", "/file/**", "/project/**")
+                .addPathPatterns("/user/**", "/quota/**", "/file/**", "/project/**", "/ppt/**")
                 .excludePathPatterns(
                         "/user/login/**",
                         "/user/register/**",
