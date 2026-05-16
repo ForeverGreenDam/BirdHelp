@@ -517,7 +517,11 @@ src/main/java/com/greendam/birdhelp/
 - [x] 额度模块（查询、扣减、退还、惰性跨天重置）
 - [x] 文件模块（上传、下载、列表、搜索、回收站、定时清理）
 - [x] 项目模块（创建、删除、编辑、列表、归档/激活，级联清理通知）
-- [ ] 内部接口（对接 AI 模块）
+- [x] AI 生成代理接口 — PPT 生成（`POST /ppt/generate` → `/ai/ppt/generate`）
+- [x] AI 生成代理接口 — Word 生成（`POST /word/generate` → `/ai/word/generate`）
+- [x] AI 生成代理接口 — PDF 生成（`POST /pdf/generate` → `/ai/pdf/generate`）
+- [x] AI 素材管理代理接口 — 上传/删除/重建索引/清理向量（`/ai/material/**`）
+- [x] 内部接口签名验证（`/api/internal/**` 的 RSA 验签过滤器 SignFilter）
 
 ### 第三阶段：商业化
 - [ ] 会员模块（套餐、订单、支付回调）

@@ -16,10 +16,10 @@
 token: {JWT Token}
 ```
 
-| 模块                         | 是否需要 Token |
-|----------------------------|:----------:|
-| 注册、登录、发送验证码、重置密码           |     否      |
-| 用户信息、项目管理、文件管理、PPT 生成、额度查询 |     是      |
+| 模块                                  | 是否需要 Token |
+|-------------------------------------|:----------:|
+| 注册、登录、发送验证码、重置密码                    |     否      |
+| 用户信息、项目管理、文件管理、PPT/Word/PDF 生成、额度查询 |     是      |
 
 ---
 
@@ -466,11 +466,133 @@ POST /ppt/generate
 
 ---
 
-## 六、额度模块 — `/quota`
+## 六、Word 生成模块 — `/word`
+
+> 需 Token。同步接口，请求会阻塞 20–60 秒，前端需设置充足的超时时间（建议 ≥ 90 秒）。
+
+### 6.1 生成 Word
+
+```
+POST /word/generate
+```
+
+| 参数            | 类型     | 必填 | 默认值     | 说明                                                    |
+|---------------|--------|:--:|---------|-------------------------------------------------------|
+| `projectId`   | string | 是  | —       | 项目 ID                                                 |
+| `topic`       | string | 是  | —       | 文档主题，最长 200 字符                                        |
+| `language`    | string | 否  | `zh`    | `zh` 中文 / `en` 英文                                     |
+| `docType`     | string | 否  | `essay` | `essay` 论文 / `report` 报告 / `letter` 信函 / `paper` 学术论文 |
+| `wordCount`   | int    | 否  | `2000`  | 目标字数，范围 500–10000                                     |
+| `extraPrompt` | string | 否  | —       | 补充指令，最长 500 字符                                        |
+| `materialIds` | list   | 否  | `[]`    | 参考素材的 `javaFileId` 列表                                 |
+| `ragEnabled`  | bool   | 否  | `false` | 是否启用 RAG 检索增强                                         |
+
+```json
+{
+  "projectId": "1",
+  "topic": "人工智能发展报告",
+  "language": "zh",
+  "docType": "report",
+  "wordCount": 3000,
+  "extraPrompt": "重点阐述深度学习部分",
+  "materialIds": [
+    "42",
+    "43"
+  ],
+  "ragEnabled": true
+}
+```
+
+响应 `BaseResponse<WordGenerateResultVO>`：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "fileId": "129",
+    "fileUrl": "https://storage.example.com/files/129.docx",
+    "fileName": "人工智能发展报告.docx"
+  }
+}
+```
+
+可能的错误码：
+
+| 场景       | message                      |
+|----------|------------------------------|
+| 额度不足     | `Word 生成失败: 额度不足，无法开始生成任务`   |
+| 内容生成失败   | `Word 生成失败: 大纲生成失败，已达最大重试次数` |
+| AI 模块未配置 | `AI 模块未配置，无法生成 Word`         |
+| 网络异常     | `Word 生成请求失败，请稍后重试`          |
+
+---
+
+## 七、PDF 生成模块 — `/pdf`
+
+> 需 Token。同步接口，请求会阻塞 20–90 秒（含 LibreOffice 转换），前端需设置充足的超时时间（建议 ≥ 120 秒）。
+
+### 7.1 生成 PDF
+
+```
+POST /pdf/generate
+```
+
+| 参数            | 类型     | 必填 | 默认值      | 说明                                    |
+|---------------|--------|:--:|----------|---------------------------------------|
+| `projectId`   | string | 是  | —        | 项目 ID                                 |
+| `topic`       | string | 是  | —        | 文档主题，最长 200 字符                        |
+| `language`    | string | 否  | `zh`     | `zh` 中文 / `en` 英文                     |
+| `docType`     | string | 否  | `report` | `report` 报告 / `resume` 简历 / `form` 表单 |
+| `extraPrompt` | string | 否  | —        | 补充指令，最长 500 字符                        |
+| `materialIds` | list   | 否  | `[]`     | 参考素材的 `javaFileId` 列表                 |
+| `ragEnabled`  | bool   | 否  | `false`  | 是否启用 RAG 检索增强                         |
+
+```json
+{
+  "projectId": "1",
+  "topic": "年度工作总结",
+  "language": "zh",
+  "docType": "report",
+  "extraPrompt": "突出Q3业绩数据",
+  "materialIds": [
+    "42",
+    "43"
+  ],
+  "ragEnabled": true
+}
+```
+
+响应 `BaseResponse<PdfGenerateResultVO>`：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "fileId": "130",
+    "fileUrl": "https://storage.example.com/files/130.pdf",
+    "fileName": "年度工作总结.pdf"
+  }
+}
+```
+
+可能的错误码：
+
+| 场景       | message                     |
+|----------|-----------------------------|
+| 额度不足     | `PDF 生成失败: 额度不足，无法开始生成任务`   |
+| 内容生成失败   | `PDF 生成失败: 大纲生成失败，已达最大重试次数` |
+| AI 模块未配置 | `AI 模块未配置，无法生成 PDF`         |
+| 网络异常     | `PDF 生成请求失败，请稍后重试`          |
+
+---
+
+## 八、额度模块 — `/quota`
 
 > 需 Token
 
-### 6.1 查询我的额度
+### 8.1 查询我的额度
 
 ```
 GET /quota/my
@@ -493,7 +615,7 @@ GET /quota/my
 
 ---
 
-## 七、通用错误码
+## 九、通用错误码
 
 |  code   | 说明             |
 |:-------:|----------------|
@@ -514,7 +636,7 @@ GET /quota/my
 
 ---
 
-## 八、分页响应格式
+## 十、分页响应格式
 
 所有列表接口返回统一分页结构：
 
