@@ -11,6 +11,7 @@ import com.greendam.birdhelp.model.entity.FileRecord;
 import com.greendam.birdhelp.model.vo.FileRecordVO;
 import com.greendam.birdhelp.service.FileService;
 import com.greendam.birdhelp.service.FileStorageService;
+import com.greendam.birdhelp.service.ProjectService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -45,6 +46,9 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
 
     @Resource
     private AiModuleCaller aiModuleCaller;
+
+    @Resource
+    private ProjectService projectService;
 
     /** 回收站保留天数 */
     private static final int RECYCLE_DAYS = 30;
@@ -137,6 +141,7 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
         record.setDeleted(1);
         record.setDeletedAt(LocalDateTime.now());
         updateById(record);
+        projectService.decrementFileCount(record.getProjectId());
         log.info("文件移入回收站: id={}, userId={}", id, userId);
 
         // 通知 AI 模块删除素材向量
@@ -152,6 +157,7 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
         record.setDeleted(0);
         record.setDeletedAt(null);
         updateById(record);
+        projectService.incrementFileCount(record.getProjectId());
         log.info("从回收站恢复文件: id={}, userId={}", id, userId);
 
         // 通知 AI 模块重建向量索引
@@ -164,6 +170,9 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
         Long projectId = record.getProjectId();
         fileStorageService.delete(record.getFileUrl());
         removeById(id);
+        if (record.getDeleted() == 0) {
+            projectService.decrementFileCount(projectId);
+        }
         log.info("永久删除文件: id={}, userId={}", id, userId);
 
         // 通知 AI 模块清理残留向量
@@ -204,6 +213,8 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
         record.setSource(source);
         record.setDeleted(0);
         save(record);
+
+        projectService.incrementFileCount(projectId);
 
         log.info("文件上传成功: id={}, projectId={}, fileName={}, fileType={}, source={}",
                 record.getId(), projectId, originalName, fileType, source);

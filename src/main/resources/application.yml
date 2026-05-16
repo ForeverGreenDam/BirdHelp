@@ -50,7 +50,7 @@ knife4j:
 jwt:
   user-secret-key: ${jwt.user-secret-key}
   user-token-name: token
-  user-ttl: 300000
+  user-ttl: 3600000
 internal-api:
   public-key: ${internal-api.public-key}
   timestamp-window: 300
