@@ -4,7 +4,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.greendam.birdhelp.exception.BusinessException;
 import com.greendam.birdhelp.exception.ErrorCode;
+import com.greendam.birdhelp.model.vo.PdfGenerateResultVO;
 import com.greendam.birdhelp.model.vo.PptGenerateResultVO;
+import com.greendam.birdhelp.model.vo.WordGenerateResultVO;
 import com.greendam.birdhelp.properties.AiModuleProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -198,6 +200,153 @@ public class AiModuleCaller {
         } catch (Exception e) {
             log.error("AI PPT 生成失败: userId={}, projectId={}, topic={}", userId, projectId, topic, e);
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "PPT 生成请求失败，请稍后重试");
+        }
+    }
+
+    /**
+     * 调用 AI 模块生成 Word（同步，阻塞 20–60 秒）。
+     *
+     * @return Word 生成结果（文件 ID、URL、文件名）
+     * @throws BusinessException AI 模块返回错误或网络异常时抛出
+     */
+    public WordGenerateResultVO generateWord(String userId, String projectId, String topic,
+                                             String language, String docType, Integer wordCount,
+                                             String extraPrompt, java.util.List<String> materialIds,
+                                             Boolean ragEnabled, String callbackId) {
+        if (!isReady()) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "AI 模块未配置，无法生成 Word");
+        }
+        try {
+            java.util.Map<String, Object> bodyMap = new java.util.LinkedHashMap<>();
+            bodyMap.put("user_id", userId);
+            bodyMap.put("project_id", projectId);
+            bodyMap.put("topic", topic);
+            bodyMap.put("language", language != null ? language : "zh");
+            bodyMap.put("doc_type", docType != null ? docType : "essay");
+            bodyMap.put("word_count", wordCount != null ? wordCount : 2000);
+            bodyMap.put("extra_prompt", extraPrompt != null ? extraPrompt : "");
+            bodyMap.put("material_ids", materialIds != null ? materialIds : java.util.List.of());
+            bodyMap.put("rag_enabled", ragEnabled != null ? ragEnabled : false);
+            bodyMap.put("callback_id", callbackId);
+
+            String jsonBody = objectMapper.writeValueAsString(bodyMap);
+            java.net.http.HttpResponse<String> resp = signedJsonRequest("POST", "/ai/word/generate", jsonBody);
+
+            String respBody = resp.body();
+            log.info("AI Word 生成完成: status={}, body={}", resp.statusCode(), respBody);
+
+            java.util.Map<String, Object> respMap = objectMapper.readValue(
+                    respBody, new TypeReference<java.util.Map<String, Object>>() {
+                    });
+
+            int code = respMap.containsKey("code")
+                    ? ((Number) respMap.get("code")).intValue()
+                    : resp.statusCode();
+
+            if (code != 0) {
+                String message = (String) respMap.getOrDefault("message", "AI 模块未知错误");
+                if (respMap.containsKey("detail")) {
+                    Object detail = respMap.get("detail");
+                    if (detail instanceof java.util.Map) {
+                        @SuppressWarnings("unchecked")
+                        java.util.Map<String, Object> detailMap = (java.util.Map<String, Object>) detail;
+                        message = (String) detailMap.getOrDefault("message", message);
+                    } else {
+                        message = String.valueOf(detail);
+                    }
+                }
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "Word 生成失败: " + message);
+            }
+
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> data = (java.util.Map<String, Object>) respMap.get("data");
+            if (data == null) {
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "Word 生成返回数据为空");
+            }
+
+            return WordGenerateResultVO.builder()
+                    .fileId(Long.valueOf(String.valueOf(data.get("file_id"))))
+                    .fileUrl((String) data.get("file_url"))
+                    .fileName((String) data.get("file_name"))
+                    .build();
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("AI Word 生成失败: userId={}, projectId={}, topic={}", userId, projectId, topic, e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "Word 生成请求失败，请稍后重试");
+        }
+    }
+
+    /**
+     * 调用 AI 模块生成 PDF（同步，阻塞 20–90 秒，含 LibreOffice 转换）。
+     *
+     * @return PDF 生成结果（文件 ID、URL、文件名）
+     * @throws BusinessException AI 模块返回错误或网络异常时抛出
+     */
+    public PdfGenerateResultVO generatePdf(String userId, String projectId, String topic,
+                                           String language, String docType,
+                                           String extraPrompt, java.util.List<String> materialIds,
+                                           Boolean ragEnabled, String callbackId) {
+        if (!isReady()) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "AI 模块未配置，无法生成 PDF");
+        }
+        try {
+            java.util.Map<String, Object> bodyMap = new java.util.LinkedHashMap<>();
+            bodyMap.put("user_id", userId);
+            bodyMap.put("project_id", projectId);
+            bodyMap.put("topic", topic);
+            bodyMap.put("language", language != null ? language : "zh");
+            bodyMap.put("doc_type", docType != null ? docType : "report");
+            bodyMap.put("extra_prompt", extraPrompt != null ? extraPrompt : "");
+            bodyMap.put("material_ids", materialIds != null ? materialIds : java.util.List.of());
+            bodyMap.put("rag_enabled", ragEnabled != null ? ragEnabled : false);
+            bodyMap.put("callback_id", callbackId);
+
+            String jsonBody = objectMapper.writeValueAsString(bodyMap);
+            java.net.http.HttpResponse<String> resp = signedJsonRequest("POST", "/ai/pdf/generate", jsonBody);
+
+            String respBody = resp.body();
+            log.info("AI PDF 生成完成: status={}, body={}", resp.statusCode(), respBody);
+
+            java.util.Map<String, Object> respMap = objectMapper.readValue(
+                    respBody, new TypeReference<java.util.Map<String, Object>>() {
+                    });
+
+            int code = respMap.containsKey("code")
+                    ? ((Number) respMap.get("code")).intValue()
+                    : resp.statusCode();
+
+            if (code != 0) {
+                String message = (String) respMap.getOrDefault("message", "AI 模块未知错误");
+                if (respMap.containsKey("detail")) {
+                    Object detail = respMap.get("detail");
+                    if (detail instanceof java.util.Map) {
+                        @SuppressWarnings("unchecked")
+                        java.util.Map<String, Object> detailMap = (java.util.Map<String, Object>) detail;
+                        message = (String) detailMap.getOrDefault("message", message);
+                    } else {
+                        message = String.valueOf(detail);
+                    }
+                }
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "PDF 生成失败: " + message);
+            }
+
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> data = (java.util.Map<String, Object>) respMap.get("data");
+            if (data == null) {
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "PDF 生成返回数据为空");
+            }
+
+            return PdfGenerateResultVO.builder()
+                    .fileId(Long.valueOf(String.valueOf(data.get("file_id"))))
+                    .fileUrl((String) data.get("file_url"))
+                    .fileName((String) data.get("file_name"))
+                    .build();
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("AI PDF 生成失败: userId={}, projectId={}, topic={}", userId, projectId, topic, e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "PDF 生成请求失败，请稍后重试");
         }
     }
 

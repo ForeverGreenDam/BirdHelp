@@ -1,7 +1,7 @@
 package com.greendam.birdhelp.mapper;
 
-import com.greendam.birdhelp.model.entity.Project;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.greendam.birdhelp.model.entity.Project;
 import org.apache.ibatis.annotations.Mapper;
 
 /**

@@ -1,11 +1,12 @@
 package com.greendam.birdhelp.model.entity;
 
-import com.baomidou.mybatisplus.annotation.*;
-
-import java.time.LocalDate;
-
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+
+import java.time.LocalDate;
 
 /**
  * <p>
