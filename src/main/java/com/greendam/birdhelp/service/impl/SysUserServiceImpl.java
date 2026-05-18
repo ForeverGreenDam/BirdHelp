@@ -5,6 +5,7 @@ import cn.hutool.crypto.digest.BCrypt;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.greendam.birdhelp.common.utils.AliOssUtil;
 import com.greendam.birdhelp.common.utils.JwtUtil;
+import com.greendam.birdhelp.common.utils.MailUtil;
 import com.greendam.birdhelp.constant.JwtClaimsConstant;
 import com.greendam.birdhelp.exception.BusinessException;
 import com.greendam.birdhelp.exception.ErrorCode;
@@ -56,6 +57,9 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
     @Resource
     private AliOssUtil aliOssUtil;
 
+    @Resource
+    private MailUtil mailUtil;
+
     /** Redis 验证码键前缀 */
     private static final String VERIFY_CODE_PREFIX = "verify_code:";
 
@@ -74,7 +78,12 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
         String code = RandomUtil.randomNumbers(6);
         String key = VERIFY_CODE_PREFIX + dto.getType() + ":" + dto.getTarget();
         stringRedisTemplate.opsForValue().set(key, code, Duration.ofMinutes(5));
-        log.info("向 {} 发送验证码: {} (类型: {})", dto.getTarget(), code, dto.getType());
+
+        if (MailUtil.isEmail(dto.getTarget())) {
+            mailUtil.sendVerifyCode(dto.getTarget(), code, dto.getType());
+        } else {
+            log.info("向 {} 发送验证码: {} (类型: {})", dto.getTarget(), code, dto.getType());
+        }
     }
 
     /**

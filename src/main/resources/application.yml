@@ -17,7 +17,21 @@ spring:
     port: ${redis.port}
     database: ${redis.database}
     password: ${redis.password}
-
+  mail:
+    host: ${mail.host}
+    port: ${mail.port}
+    username: ${mail.username}
+    password: ${mail.password}
+    protocol: smtps
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+          starttls:
+            enable: true
+            required: true
 
 mybatis-plus:
   configuration:
@@ -58,6 +72,9 @@ ai-module:
   base-url: ${ai-module.base-url}
   private-key: ${ai-module.private-key}
 
+mail:
+  from: ${mail.from}
+  from-name: ${mail.from-name:BirdHelp}
 app:
   upload-dir: ./upload
 alioss:
