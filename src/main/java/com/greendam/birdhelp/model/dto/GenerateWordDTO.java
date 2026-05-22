@@ -45,10 +45,20 @@ public class GenerateWordDTO {
     private Integer wordCount;
 
     /**
+     * 风格：academic（学术）/ business（商务）/ creative（创意）/ minimal（极简）/ tech（科技）/ warm（暖色），默认 academic
+     */
+    private String style;
+
+    /**
      * 用户补充指令，如 "重点阐述深度学习部分"
      */
     @Size(max = 500, message = "补充指令最长500个字符")
     private String extraPrompt;
+
+    /**
+     * 是否自动搜索配图（Unsplash → Pexels → 纯色占位图降级），默认 true
+     */
+    private Boolean enableImages;
 
     /**
      * RAG 参考素材的 javaFileId 列表

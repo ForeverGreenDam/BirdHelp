@@ -60,7 +60,9 @@ public class WordController {
                 dto.getLanguage(),
                 dto.getDocType(),
                 dto.getWordCount(),
+                dto.getStyle(),
                 dto.getExtraPrompt(),
+                dto.getEnableImages(),
                 dto.getMaterialIds(),
                 dto.getRagEnabled(),
                 callbackId

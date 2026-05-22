@@ -59,7 +59,9 @@ public class PdfController {
                 dto.getTopic(),
                 dto.getLanguage(),
                 dto.getDocType(),
+                dto.getStyle(),
                 dto.getExtraPrompt(),
+                dto.getEnableImages(),
                 dto.getMaterialIds(),
                 dto.getRagEnabled(),
                 callbackId

@@ -470,7 +470,7 @@ POST /ppt/generate
 
 ## 六、Word 生成模块 — `/word`
 
-> 需 Token。同步接口，请求会阻塞 20–60 秒，前端需设置充足的超时时间（建议 ≥ 90 秒）。
+> 需 Token。同步接口，请求会阻塞 30–90 秒，前端需设置充足的超时时间（建议 ≥ 120 秒）。
 
 ### 6.1 生成 Word
 
@@ -478,16 +478,18 @@ POST /ppt/generate
 POST /word/generate
 ```
 
-| 参数            | 类型     | 必填 | 默认值     | 说明                                                    |
-|---------------|--------|:--:|---------|-------------------------------------------------------|
-| `projectId`   | string | 是  | —       | 项目 ID                                                 |
-| `topic`       | string | 是  | —       | 文档主题，最长 200 字符                                        |
-| `language`    | string | 否  | `zh`    | `zh` 中文 / `en` 英文                                     |
-| `docType`     | string | 否  | `essay` | `essay` 论文 / `report` 报告 / `letter` 信函 / `paper` 学术论文 |
-| `wordCount`   | int    | 否  | `2000`  | 目标字数，范围 500–10000                                     |
-| `extraPrompt` | string | 否  | —       | 补充指令，最长 500 字符                                        |
-| `materialIds` | list   | 否  | `[]`    | 参考素材的 `javaFileId` 列表                                 |
-| `ragEnabled`  | bool   | 否  | `false` | 是否启用 RAG 检索增强                                         |
+| 参数             | 类型     | 必填 | 默认值        | 说明                                                                                   |
+|----------------|--------|:--:|------------|--------------------------------------------------------------------------------------|
+| `projectId`    | string | 是  | —          | 项目 ID                                                                                |
+| `topic`        | string | 是  | —          | 文档主题，最长 200 字符                                                                       |
+| `language`     | string | 否  | `zh`       | `zh` 中文 / `en` 英文                                                                    |
+| `docType`      | string | 否  | `essay`    | `essay` 论文 / `report` 报告 / `letter` 信函 / `paper` 学术论文                                |
+| `wordCount`    | int    | 否  | `2000`     | 目标字数，范围 500–10000                                                                    |
+| `style`        | string | 否  | `academic` | `academic` 学术 / `business` 商务 / `creative` 创意 / `minimal` 极简 / `tech` 科技 / `warm` 暖色 |
+| `extraPrompt`  | string | 否  | —          | 补充指令，最长 500 字符                                                                       |
+| `enableImages` | bool   | 否  | `true`     | 是否自动搜索配图（Unsplash → Pexels → 纯色占位图降级）                                                |
+| `materialIds`  | list   | 否  | `[]`       | 参考素材的 `javaFileId` 列表                                                                |
+| `ragEnabled`   | bool   | 否  | `false`    | 是否启用 RAG 检索增强                                                                        |
 
 ```json
 {
@@ -496,7 +498,9 @@ POST /word/generate
   "language": "zh",
   "docType": "report",
   "wordCount": 3000,
+  "style": "tech",
   "extraPrompt": "重点阐述深度学习部分",
+  "enableImages": true,
   "materialIds": [
     "42",
     "43"
@@ -532,7 +536,7 @@ POST /word/generate
 
 ## 七、PDF 生成模块 — `/pdf`
 
-> 需 Token。同步接口，请求会阻塞 20–90 秒（含 LibreOffice 转换），前端需设置充足的超时时间（建议 ≥ 120 秒）。
+> 需 Token。同步接口，请求会阻塞 30–120 秒（含 LibreOffice 转换），前端需设置充足的超时时间（建议 ≥ 150 秒）。
 
 ### 7.1 生成 PDF
 
@@ -540,15 +544,17 @@ POST /word/generate
 POST /pdf/generate
 ```
 
-| 参数            | 类型     | 必填 | 默认值      | 说明                                    |
-|---------------|--------|:--:|----------|---------------------------------------|
-| `projectId`   | string | 是  | —        | 项目 ID                                 |
-| `topic`       | string | 是  | —        | 文档主题，最长 200 字符                        |
-| `language`    | string | 否  | `zh`     | `zh` 中文 / `en` 英文                     |
-| `docType`     | string | 否  | `report` | `report` 报告 / `resume` 简历 / `form` 表单 |
-| `extraPrompt` | string | 否  | —        | 补充指令，最长 500 字符                        |
-| `materialIds` | list   | 否  | `[]`     | 参考素材的 `javaFileId` 列表                 |
-| `ragEnabled`  | bool   | 否  | `false`  | 是否启用 RAG 检索增强                         |
+| 参数             | 类型     | 必填 | 默认值        | 说明                                                                                   |
+|----------------|--------|:--:|------------|--------------------------------------------------------------------------------------|
+| `projectId`    | string | 是  | —          | 项目 ID                                                                                |
+| `topic`        | string | 是  | —          | 文档主题，最长 200 字符                                                                       |
+| `language`     | string | 否  | `zh`       | `zh` 中文 / `en` 英文                                                                    |
+| `docType`      | string | 否  | `report`   | `report` 报告 / `resume` 简历 / `form` 表单                                                |
+| `style`        | string | 否  | `academic` | `academic` 学术 / `business` 商务 / `creative` 创意 / `minimal` 极简 / `tech` 科技 / `warm` 暖色 |
+| `extraPrompt`  | string | 否  | —          | 补充指令，最长 500 字符                                                                       |
+| `enableImages` | bool   | 否  | `true`     | 是否自动搜索配图（Unsplash → Pexels → 纯色占位图降级）                                                |
+| `materialIds`  | list   | 否  | `[]`       | 参考素材的 `javaFileId` 列表                                                                |
+| `ragEnabled`   | bool   | 否  | `false`    | 是否启用 RAG 检索增强                                                                        |
 
 ```json
 {
@@ -556,7 +562,9 @@ POST /pdf/generate
   "topic": "年度工作总结",
   "language": "zh",
   "docType": "report",
+  "style": "business",
   "extraPrompt": "突出Q3业绩数据",
+  "enableImages": true,
   "materialIds": [
     "42",
     "43"

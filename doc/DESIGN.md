@@ -415,10 +415,15 @@ Java 后端（本工程）                  AI 模块（另建工程）
 
 ```
 前端 → Java后端(/api/quota/consume) → 额度校验扣减
-     → 调用AI模块(/ai/ppt/generate, Body: {project_id, ...})
+     → 调用AI模块(/ai/{type}/generate, Body: {project_id, topic, style, enable_images, ...})
      → AI模块从 Redis 检索该项目下的素材向量（RAG，key 含 project_id）
-     → AI模块结合素材上下文生成内容
+     → LLM 生成带 layout/visual/image 的结构化内容描述
+     → 图片搜索与下载（若 enable_images=true）：Unsplash → Pexels → 纯色占位图
+     → 图表渲染（Word/PDF）：matplotlib 生成图表 PNG
+     → Q&A 逐页/逐节质量评分 + 修复循环
+     → 文档构建（PPT: 7种布局渲染 / Word: DocxBuilder含图表嵌入 / PDF: LibreOffice转换）
      → 调用Java后端(/internal/file/upload, Body: {project_id, ...}) 保存生成结果
+     → 失败时调用(/internal/quota/refund) 退还额度
      → Java后端返回文件信息
 ```
 

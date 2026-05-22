@@ -219,7 +219,8 @@ public class AiModuleCaller {
      */
     public WordGenerateResultVO generateWord(String userId, String projectId, String topic,
                                              String language, String docType, Integer wordCount,
-                                             String extraPrompt, java.util.List<String> materialIds,
+                                             String style, String extraPrompt, Boolean enableImages,
+                                             java.util.List<String> materialIds,
                                              Boolean ragEnabled, String callbackId) {
         if (!isReady()) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "AI 模块未配置，无法生成 Word");
@@ -232,7 +233,9 @@ public class AiModuleCaller {
             bodyMap.put("language", language != null ? language : "zh");
             bodyMap.put("doc_type", docType != null ? docType : "essay");
             bodyMap.put("word_count", wordCount != null ? wordCount : 2000);
+            bodyMap.put("style", style != null ? style : "academic");
             bodyMap.put("extra_prompt", extraPrompt != null ? extraPrompt : "");
+            bodyMap.put("enable_images", enableImages != null ? enableImages : true);
             bodyMap.put("material_ids", materialIds != null ? materialIds : java.util.List.of());
             bodyMap.put("rag_enabled", ragEnabled != null ? ragEnabled : false);
             bodyMap.put("callback_id", callbackId);
@@ -298,7 +301,8 @@ public class AiModuleCaller {
      */
     public PdfGenerateResultVO generatePdf(String userId, String projectId, String topic,
                                            String language, String docType,
-                                           String extraPrompt, java.util.List<String> materialIds,
+                                           String style, String extraPrompt, Boolean enableImages,
+                                           java.util.List<String> materialIds,
                                            Boolean ragEnabled, String callbackId) {
         if (!isReady()) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "AI 模块未配置，无法生成 PDF");
@@ -310,7 +314,9 @@ public class AiModuleCaller {
             bodyMap.put("topic", topic);
             bodyMap.put("language", language != null ? language : "zh");
             bodyMap.put("doc_type", docType != null ? docType : "report");
+            bodyMap.put("style", style != null ? style : "academic");
             bodyMap.put("extra_prompt", extraPrompt != null ? extraPrompt : "");
+            bodyMap.put("enable_images", enableImages != null ? enableImages : true);
             bodyMap.put("material_ids", materialIds != null ? materialIds : java.util.List.of());
             bodyMap.put("rag_enabled", ragEnabled != null ? ragEnabled : false);
             bodyMap.put("callback_id", callbackId);
