@@ -135,7 +135,8 @@ public class AiModuleCaller {
      */
     public PptGenerateResultVO generatePpt(String userId, String projectId, String topic,
                                            String language, String style, Integer slideCount,
-                                           String extraPrompt, java.util.List<String> materialIds,
+                                           String extraPrompt, Boolean enableImages,
+                                           java.util.List<String> materialIds,
                                            Boolean ragEnabled, String callbackId) {
         if (!isReady()) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "AI 模块未配置，无法生成 PPT");
@@ -149,6 +150,7 @@ public class AiModuleCaller {
             bodyMap.put("style", style != null ? style : "academic");
             bodyMap.put("slide_count", slideCount != null ? slideCount : 10);
             bodyMap.put("extra_prompt", extraPrompt != null ? extraPrompt : "");
+            bodyMap.put("enable_images", enableImages != null ? enableImages : true);
             bodyMap.put("material_ids", materialIds != null ? materialIds : java.util.List.of());
             bodyMap.put("rag_enabled", ragEnabled != null ? ragEnabled : false);
             bodyMap.put("callback_id", callbackId);

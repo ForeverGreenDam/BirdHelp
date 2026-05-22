@@ -35,12 +35,12 @@ public class GeneratePptDTO {
     private String language;
 
     /**
-     * 风格：academic（学术）/ business（商务）/ creative（创意），默认 academic
+     * 风格：academic（学术）/ business（商务）/ creative（创意）/ minimal（极简）/ tech（科技）/ warm（暖色），默认 academic
      */
     private String style;
 
     /**
-     * 幻灯片页数，范围 1–50，默认 10
+     * 幻灯片页数（含封面和结束页），范围 1–50，默认 10
      */
     private Integer slideCount;
 
@@ -49,6 +49,11 @@ public class GeneratePptDTO {
      */
     @Size(max = 500, message = "补充指令最长500个字符")
     private String extraPrompt;
+
+    /**
+     * 是否自动搜索配图（Unsplash → Pexels → 纯色占位图降级），默认 true
+     */
+    private Boolean enableImages;
 
     /**
      * RAG 参考素材的 javaFileId 列表

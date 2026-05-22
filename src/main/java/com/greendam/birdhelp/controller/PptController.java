@@ -61,6 +61,7 @@ public class PptController {
                 dto.getStyle(),
                 dto.getSlideCount(),
                 dto.getExtraPrompt(),
+                dto.getEnableImages(),
                 dto.getMaterialIds(),
                 dto.getRagEnabled(),
                 callbackId

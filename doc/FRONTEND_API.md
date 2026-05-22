@@ -406,7 +406,7 @@ GET /file/recycle?projectId=1&page=1&size=10
 
 ## 五、PPT 生成模块 — `/ppt`
 
-> 需 Token。同步接口，请求会阻塞 20–60 秒，前端需设置充足的超时时间（建议 ≥ 90 秒）。
+> 需 Token。同步接口，请求会阻塞 30–90 秒，前端需设置充足的超时时间（建议 ≥ 120 秒）。
 
 ### 5.1 生成 PPT
 
@@ -414,16 +414,17 @@ GET /file/recycle?projectId=1&page=1&size=10
 POST /ppt/generate
 ```
 
-| 参数            | 类型     | 必填 | 默认值        | 说明                                            |
-|---------------|--------|:--:|------------|-----------------------------------------------|
-| `projectId`   | string | 是  | —          | 项目 ID                                         |
-| `topic`       | string | 是  | —          | PPT 主题，最长 200 字符                              |
-| `language`    | string | 否  | `zh`       | `zh` 中文 / `en` 英文                             |
-| `style`       | string | 否  | `academic` | `academic` 学术 / `business` 商务 / `creative` 创意 |
-| `slideCount`  | int    | 否  | `10`       | 页数，范围 1–50                                    |
-| `extraPrompt` | string | 否  | —          | 补充指令，最长 500 字符                                |
-| `materialIds` | list   | 否  | `[]`       | 参考素材的 `javaFileId` 列表                         |
-| `ragEnabled`  | bool   | 否  | `false`    | 是否启用 RAG 检索增强                                 |
+| 参数             | 类型     | 必填 | 默认值        | 说明                                                                                   |
+|----------------|--------|:--:|------------|--------------------------------------------------------------------------------------|
+| `projectId`    | string | 是  | —          | 项目 ID                                                                                |
+| `topic`        | string | 是  | —          | PPT 主题，最长 200 字符                                                                     |
+| `language`     | string | 否  | `zh`       | `zh` 中文 / `en` 英文                                                                    |
+| `style`        | string | 否  | `academic` | `academic` 学术 / `business` 商务 / `creative` 创意 / `minimal` 极简 / `tech` 科技 / `warm` 暖色 |
+| `slideCount`   | int    | 否  | `10`       | 页数（含封面和结束页），范围 1–50                                                                  |
+| `extraPrompt`  | string | 否  | —          | 补充指令，最长 500 字符                                                                       |
+| `enableImages` | bool   | 否  | `true`     | 是否自动搜索配图（Unsplash → Pexels → 纯色占位图降级）                                                |
+| `materialIds`  | list   | 否  | `[]`       | 参考素材的 `javaFileId` 列表                                                                |
+| `ragEnabled`   | bool   | 否  | `false`    | 是否启用 RAG 检索增强                                                                        |
 
 ```json
 {
@@ -433,6 +434,7 @@ POST /ppt/generate
   "style": "academic",
   "slideCount": 10,
   "extraPrompt": "重点讲解面向对象三大特性",
+  "enableImages": true,
   "materialIds": [
     "42",
     "43"
