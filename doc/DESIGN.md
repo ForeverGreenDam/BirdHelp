@@ -380,9 +380,6 @@ Java 后端（本工程）                  AI 模块（另建工程）
 
 | 方法 | 路径 | 用途                                  |
 |------|------|-------------------------------------|
-| POST | /ai/ppt/generate | 生成 PPT（Body 含 project_id，RAG 检索限定该项目） |
-| POST | /ai/word/generate | 生成 Word（同上）                        |
-| POST | /ai/pdf/generate | 生成 PDF（同上）                        |
 | POST | /ai/chat/modify | 对话式修改文档（Body 含 project_id）          |
 | POST | /ai/material/upload | 上传素材并触发 RAG 摄取（Body 含 project_id）   |
 | GET | /ai/material/list | 查询项目素材列表（Query 含 project_id）       |
@@ -392,14 +389,16 @@ Java 后端（本工程）                  AI 模块（另建工程）
 
 所有内部接口均通过 `/internal/*` 路径，使用 RSA 签名校验（`X-Timestamp` + `X-Nonce` + `X-Signature`）替代 JWT 鉴权。
 
-| 方法 | 路径 | 用途 |
-|------|------|------|
-| POST | /internal/quota/consume | AI 生成前扣减额度 |
-| POST | /internal/quota/refund | 生成失败退还额度 |
-| POST | /internal/file/upload | AI 模块上传文件（素材 / 生成结果，Body 含 project_id） |
-| GET | /internal/file/{id}/download | AI 模块下载文件（向量化等处理用） |
-| GET | /internal/file/list | AI 模块代理查询文件列表（Query 含 project_id） |
-| DELETE | /internal/file/{id} | AI 模块软删除文件，移入回收站（Query 含 userId） |
+| 方法     | 路径                           | 用途                                     |
+|--------|------------------------------|----------------------------------------|
+| POST   | /internal/quota/consume      | AI 生成前扣减额度                             |
+| POST   | /internal/quota/refund       | 生成失败退还额度                               |
+| POST   | /internal/file/upload        | AI 模块上传文件（素材 / 生成结果，Body 含 project_id） |
+| GET    | /internal/file/{id}/download | AI 模块下载文件（向量化等处理用）                     |
+| GET    | /internal/file/list          | AI 模块代理查询文件列表（Query 含 project_id）      |
+| DELETE | /internal/file/{id}          | AI 模块软删除文件，移入回收站（Query 含 userId）       |
+| POST   | /internal/task/callback      | 接收文档生成任务完成/失败回调                        |
+| POST   | /internal/task/progress      | 接收文档生成任务进度通知（可选）                       |
 
 ### 7.4 Java 后端调用 AI 模块的内部接口
 
@@ -411,21 +410,30 @@ Java 后端（本工程）                  AI 模块（另建工程）
 
 ### 7.5 调用链
 
-#### 文档生成（含 RAG 增强）
+#### 文档生成（RabbitMQ 异步，含 RAG 增强）
 
 ```
-前端 → Java后端(/api/quota/consume) → 额度校验扣减
-     → 调用AI模块(/ai/{type}/generate, Body: {project_id, topic, style, enable_images, ...})
-     → AI模块从 Redis 检索该项目下的素材向量（RAG，key 含 project_id）
-     → LLM 生成带 layout/visual/image 的结构化内容描述
-     → 图片搜索与下载（若 enable_images=true）：Unsplash → Pexels → 纯色占位图
+前端 → Java后端(/ppt/generate 等) → 生成 taskId
+     → 发送消息到 RabbitMQ Exchange birdhelp.doc.generation (routing key: doc.generate.{type})
+     → 立即返回 {taskId, status: "pending"} 给前端
+
+Python AI 模块（消费者）:
+     → 从 birdhelp.doc.generation.tasks 队列消费消息
+     → 调用Java后端(/internal/quota/consume) 扣减额度
+     → RAG 检索（若 ragEnabled=true，从 Redis 检索该项目下的素材向量）
+     → LLM 生成结构化内容 → 校验 → 重试 ≤3 次
+     → 图片搜索与下载（若 enableImages=true）
      → 图表渲染（Word/PDF）：matplotlib 生成图表 PNG
-     → Q&A 逐页/逐节质量评分 + 修复循环
-     → 文档构建（PPT: 7种布局渲染 / Word: DocxBuilder含图表嵌入 / PDF: LibreOffice转换）
-     → 调用Java后端(/internal/file/upload, Body: {project_id, ...}) 保存生成结果
+     → QA 逐页/逐节质量评分 + 修复循环
+     → 文档构建（PPT: 7种布局渲染 / Word: DocxBuilder / PDF: LibreOffice转换）
+     → 调用Java后端(/internal/file/upload) 保存生成结果
+     → (可选) 推送进度到 /internal/task/progress
+     → 调用Java后端(/internal/task/callback) 通知完成/失败
      → 失败时调用(/internal/quota/refund) 退还额度
-     → Java后端返回文件信息
+     → ACK 消息
 ```
+
+> 详细协议见 `RABBITMQ_ASYNC_PROTOCOL.md`。
 
 #### 素材上传与 RAG 摄取
 
@@ -468,18 +476,19 @@ Java 后端（本工程）                  AI 模块（另建工程）
 
 ## 八、技术选型
 
-| 组件 | 选型 | 说明 |
-|------|------|------|
-| 框架 | Spring Boot 2.6.13 | 已搭建 |
-| ORM | MyBatis-Plus | 简化 CRUD |
-| 数据库 | MySQL 8.0 | 主存储 |
-| 缓存 | Redis | 验证码、会话、额度每日计数 |
-| 认证 | Spring Security + JWT | 无状态鉴权 |
-| 文件存储 | MinIO（本地）/ 阿里云 OSS（生产） | 可切换 |
-| 短信 | 阿里云短信 / 腾讯云短信 | 发送验证码 |
-| 支付 | 微信支付 API V3 | 会员支付 |
-| 定时任务 | Spring Task / XXL-Job | 额度重置、回收站清理、会员过期 |
-| API 文档 | Knife4j (Swagger) | 接口文档生成 |
+| 组件     | 选型                     | 说明                   |
+|--------|------------------------|----------------------|
+| 框架     | Spring Boot 2.6.13     | 已搭建                  |
+| ORM    | MyBatis-Plus           | 简化 CRUD              |
+| 数据库    | MySQL 8.0              | 主存储                  |
+| 缓存     | Redis                  | 验证码、会话、额度每日计数、任务状态缓存 |
+| 消息队列   | RabbitMQ               | 文档生成异步任务投递           |
+| 认证     | Spring Security + JWT  | 无状态鉴权                |
+| 文件存储   | MinIO（本地）/ 阿里云 OSS（生产） | 可切换                  |
+| 短信     | 阿里云短信 / 腾讯云短信          | 发送验证码                |
+| 支付     | 微信支付 API V3            | 会员支付                 |
+| 定时任务   | Spring Task / XXL-Job  | 额度重置、回收站清理、会员过期      |
+| API 文档 | Knife4j (Swagger)      | 接口文档生成               |
 
 ---
 
@@ -527,6 +536,8 @@ src/main/java/com/greendam/birdhelp/
 - [x] AI 生成代理接口 — PDF 生成（`POST /pdf/generate` → `/ai/pdf/generate`）
 - [x] AI 素材管理代理接口 — 上传/删除/重建索引/清理向量（`/ai/material/**`）
 - [x] 内部接口签名验证（`/api/internal/**` 的 RSA 验签过滤器 SignFilter）
+- [x] 文档生成异步化（RabbitMQ 消息投递、TaskInternalController 回调、SignFilter 覆盖 /internal/task/*）
+- [x] RabbitMQ 拓扑搭建（Exchange birdhelp.doc.generation、Queue birdhelp.doc.generation.tasks、DLX/DLQ）
 
 ### 第三阶段：商业化
 - [ ] 会员模块（套餐、订单、支付回调）

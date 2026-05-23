@@ -16,31 +16,38 @@ Knife4j API docs: http://localhost:7890/api/doc.html (basic auth: admin/123456).
 
 ## Architecture
 
-Spring Boot 2.6.13 + MyBatis-Plus 3.5.3.1, Java 19/21, MySQL.
+Spring Boot 2.6.13 + MyBatis-Plus 3.5.3.1 + RabbitMQ, Java 19/21, MySQL, Redis.
 
 ### Package layout
 
 ```
 com.greendam.birdhelp
-├── BirdHelpApplication       (entry point, @MapperScan)
+├── BirdHelpApplication       (entry point, @MapperScan, @EnableRabbit)
 ├── common/
 │   ├── BaseResponse<T>       (uniform API response: {code, data, message})
 │   ├── context/BaseContext   (ThreadLocal<Long> for current userId)
-│   └── utils/                (JwtUtil, AliOssUtil, ThrowUtils)
-├── config/                   (CORS, JSON, OSS, WebMVC interceptor reg)
+│   ├── filter/               (SignFilter — RSA signature verification for /internal/**)
+│   └── utils/                (JwtUtil, AliOssUtil, RsaSignUtil, AiModuleCaller,
+│                              DocGenerationPublisher — RabbitMQ message publishing)
+├── config/                   (CORS, JSON, OSS, RabbitMQ, WebMVC interceptor reg)
 ├── constant/                 (ErrorConstant, JwtClaimsConstant, UserRoleConstant)
+├── controller/               (PptController, WordController, PdfController — async task submission)
 ├── exception/
 │   ├── ErrorCode             (enum: 0=ok, 40000=params error, 40100=not login, 50000=system error, ...)
 │   ├── BusinessException     (runtime, wraps ErrorCode)
 │   └── GlobalExceptionHandler (@RestControllerAdvice)
 ├── handler/MyMetaObjectHandler  (MyBatis-Plus MetaObjectHandler for auto-fill)
 ├── interceptor/JwtTokenInterceptor  (validates JWT, sets userId into BaseContext)
+├── internal/                 (internal controllers for AI module — RSA signed)
+│   ├── FileInternalController
+│   ├── QuotaInternalController
+│   └── TaskInternalController  (task callback + progress)
 ├── mapper/                   (MyBatis-Plus mapper interfaces)
 ├── model/
 │   ├── entity/               (BaseEntity audit superclass, SysUser, ...)
-│   ├── dto/                  (empty, placeholder for DTOs)
-│   └── vo/                   (empty, placeholder for VOs)
-├── properties/               (@ConfigurationProperties classes)
+│   ├── dto/                  (GeneratePptDTO, DocGenerationMessage, TaskCallbackRequest, ...)
+│   └── vo/                   (DocGenerateTaskVO, PptGenerateResultVO, ...)
+├── properties/               (@ConfigurationProperties classes, incl. RabbitMQProperties)
 └── service/
     └── impl/                 (IService/ServiceImpl from MyBatis-Plus)
 ```
@@ -56,6 +63,11 @@ com.greendam.birdhelp
 **MyBatis-Plus configuration:** camelToUnderscore, ASSIGN_ID strategy, `delFlag` = logical delete column. Mapper XML in `classpath*:/mapper/**/*.xml`.
 
 **JWT:** token from request header `token`, parsed with HS256. TTL is 5 minutes (300000ms) in dev. Token contains `id` claim (userId).
+
+**RabbitMQ async document generation:** PPT/Word/PDF generation is now asynchronous. Controllers publish messages to
+exchange `birdhelp.doc.generation` with routing keys `doc.generate.ppt`/`word`/`pdf`. Python AI module consumes from
+`birdhelp.doc.generation.tasks` queue, generates the document, uploads the file, and calls back to
+`/internal/task/callback`. Task results are stored in Redis (24h TTL). Full protocol: `doc/RABBITMQ_ASYNC_PROTOCOL.md`.
 
 ## Conventions
 

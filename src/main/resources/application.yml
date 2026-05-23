@@ -32,6 +32,15 @@ spring:
           starttls:
             enable: true
             required: true
+  rabbitmq:
+    host: ${rabbitmq.host}
+    port: ${rabbitmq.port}
+    virtual-host: ${rabbitmq.vhost:/}
+    username: ${rabbitmq.username}
+    password: ${rabbitmq.password}
+    connection-timeout: 5000
+    publisher-confirm-type: correlated
+    publisher-returns: true
 
 mybatis-plus:
   configuration:
@@ -82,3 +91,9 @@ alioss:
   access-key-secret: ${alioss.access-key-secret}
   bucket-name: ${alioss.bucket-name}
   endpoint: ${alioss.endpoint}
+birdhelp:
+  rabbitmq:
+    exchange: birdhelp.doc.generation
+    queue: birdhelp.doc.generation.tasks
+    dlx: birdhelp.doc.generation.dlx
+    dlq: birdhelp.doc.generation.dlq

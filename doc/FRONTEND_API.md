@@ -406,9 +406,11 @@ GET /file/recycle?projectId=1&page=1&size=10
 
 ## 五、PPT 生成模块 — `/ppt`
 
-> 需 Token。同步接口，请求会阻塞 30–90 秒，前端需设置充足的超时时间（建议 ≥ 120 秒）。
+> 需 Token。**异步接口**，提交任务后立即返回 `taskId`，生成完成后通过回调更新状态。
+>
+> 前端可通过 `taskId` 轮询任务结果（详见 5.2 节）。
 
-### 5.1 生成 PPT
+### 5.1 提交 PPT 生成任务
 
 ```
 POST /ppt/generate
@@ -443,36 +445,123 @@ POST /ppt/generate
 }
 ```
 
-响应 `BaseResponse<PptGenerateResultVO>`：
+响应 `BaseResponse<DocGenerateTaskVO>`：
 
 ```json
 {
   "code": 0,
   "message": "success",
   "data": {
-    "fileId": "128",
-    "fileUrl": "https://storage.example.com/files/128.pptx",
-    "fileName": "Java基础语法教学.pptx"
+    "taskId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "status": "pending",
+    "callbackId": "req_20260523_001"
   }
 }
 ```
 
+| 字段           | 类型     | 说明                         |
+|--------------|--------|----------------------------|
+| `taskId`     | string | 任务唯一 ID（UUID v4），用于追踪和查询结果 |
+| `status`     | string | 固定 `"pending"`，表示任务已提交     |
+| `callbackId` | string | 业务流水 ID，用于关联请求             |
+
 可能的错误码：
 
-| 场景       | message                     |
-|----------|-----------------------------|
-| 额度不足     | `PPT 生成失败: 额度不足，无法开始生成任务`   |
-| 大纲生成失败   | `PPT 生成失败: 大纲生成失败，已达最大重试次数` |
-| AI 模块未配置 | `AI 模块未配置，无法生成 PPT`         |
-| 网络异常     | `PPT 生成请求失败，请稍后重试`          |
+| 场景   | message      |
+|------|--------------|
+| 系统繁忙 | `系统繁忙，请稍后重试` |
+
+### 5.2 查询任务结果（通用）
+
+> 需 Token。以下接口适用于 PPT / Word / PDF 三种文档类型。
+
+```
+GET /task/{taskId}
+```
+
+**响应 `BaseResponse<TaskStatusVO>`：**
+
+**pending（任务已提交，尚未开始处理）：**
+
+```json
+{
+  "code": 0,
+  "data": {
+    "taskId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "status": "pending"
+  }
+}
+```
+
+**processing（AI 模块正在生成，Python 周期性推送进度）：**
+
+```json
+{
+  "code": 0,
+  "data": {
+    "taskId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "status": "processing",
+    "stage": "running_qa",
+    "progress": 65,
+    "message": "正在质量评审：第 10/15 页"
+  }
+}
+```
+
+**completed（生成完成，文件已上传至存储）：**
+
+```json
+{
+  "code": 0,
+  "data": {
+    "taskId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "status": "completed",
+    "fileId": "128",
+    "fileUrl": "https://storage.example.com/files/128.pptx",
+    "fileName": "Java基础语法教学.pptx",
+    "qaLowestScore": 72,
+    "qaPassedCount": 14,
+    "qaTotalCount": 15
+  }
+}
+```
+
+**failed（生成失败）：**
+
+```json
+{
+  "code": 0,
+  "data": {
+    "taskId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "status": "failed",
+    "errorCode": 5002,
+    "errorMessage": "大纲验证失败：缺少主标题字段"
+  }
+}
+```
+
+**进度阶段枚举（`stage`）：**
+
+| stage                | 说明             |
+|----------------------|----------------|
+| `retrieving_context` | 检索知识库上下文       |
+| `generating_outline` | 生成大纲           |
+| `validating_outline` | 验证大纲           |
+| `rendering_charts`   | 渲染图表（Word/PDF） |
+| `fetching_images`    | 搜索配图           |
+| `running_qa`         | 质量评审           |
+| `building_document`  | 构建文档           |
+| `uploading_file`     | 上传文件           |
+
+> 前端轮询建议：提交任务后每 1–2 秒查询一次，直到 `status` 变为 `completed` 或 `failed`。结果缓存 24 小时。
 
 ---
 
 ## 六、Word 生成模块 — `/word`
 
-> 需 Token。同步接口，请求会阻塞 30–90 秒，前端需设置充足的超时时间（建议 ≥ 120 秒）。
+> 需 Token。**异步接口**，提交任务后立即返回 `taskId`，生成完成后通过回调更新状态。
 
-### 6.1 生成 Word
+### 6.1 提交 Word 生成任务
 
 ```
 POST /word/generate
@@ -509,36 +598,33 @@ POST /word/generate
 }
 ```
 
-响应 `BaseResponse<WordGenerateResultVO>`：
+响应 `BaseResponse<DocGenerateTaskVO>`：
 
 ```json
 {
   "code": 0,
   "message": "success",
   "data": {
-    "fileId": "129",
-    "fileUrl": "https://storage.example.com/files/129.docx",
-    "fileName": "人工智能发展报告.docx"
+    "taskId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    "status": "pending",
+    "callbackId": "req_20260523_002"
   }
 }
 ```
 
 可能的错误码：
 
-| 场景       | message                      |
-|----------|------------------------------|
-| 额度不足     | `Word 生成失败: 额度不足，无法开始生成任务`   |
-| 内容生成失败   | `Word 生成失败: 大纲生成失败，已达最大重试次数` |
-| AI 模块未配置 | `AI 模块未配置，无法生成 Word`         |
-| 网络异常     | `Word 生成请求失败，请稍后重试`          |
+| 场景   | message      |
+|------|--------------|
+| 系统繁忙 | `系统繁忙，请稍后重试` |
 
 ---
 
 ## 七、PDF 生成模块 — `/pdf`
 
-> 需 Token。同步接口，请求会阻塞 30–120 秒（含 LibreOffice 转换），前端需设置充足的超时时间（建议 ≥ 150 秒）。
+> 需 Token。**异步接口**，提交任务后立即返回 `taskId`，生成完成后通过回调更新状态。
 
-### 7.1 生成 PDF
+### 7.1 提交 PDF 生成任务
 
 ```
 POST /pdf/generate
@@ -573,28 +659,25 @@ POST /pdf/generate
 }
 ```
 
-响应 `BaseResponse<PdfGenerateResultVO>`：
+响应 `BaseResponse<DocGenerateTaskVO>`：
 
 ```json
 {
   "code": 0,
   "message": "success",
   "data": {
-    "fileId": "130",
-    "fileUrl": "https://storage.example.com/files/130.pdf",
-    "fileName": "年度工作总结.pdf"
+    "taskId": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+    "status": "pending",
+    "callbackId": "req_20260523_003"
   }
 }
 ```
 
 可能的错误码：
 
-| 场景       | message                     |
-|----------|-----------------------------|
-| 额度不足     | `PDF 生成失败: 额度不足，无法开始生成任务`   |
-| 内容生成失败   | `PDF 生成失败: 大纲生成失败，已达最大重试次数` |
-| AI 模块未配置 | `AI 模块未配置，无法生成 PDF`         |
-| 网络异常     | `PDF 生成请求失败，请稍后重试`          |
+| 场景   | message      |
+|------|--------------|
+| 系统繁忙 | `系统繁忙，请稍后重试` |
 
 ---
 

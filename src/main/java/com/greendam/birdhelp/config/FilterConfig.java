@@ -28,7 +28,7 @@ public class FilterConfig {
     public FilterRegistrationBean<SignFilter> signFilterRegistration(SignFilter signFilter) {
         FilterRegistrationBean<SignFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(signFilter);
-        registration.addUrlPatterns("/internal/*", "/internal/quota/*");
+        registration.addUrlPatterns("/internal/*", "/internal/quota/*", "/internal/task/*");
         registration.setOrder(0);
         return registration;
     }
