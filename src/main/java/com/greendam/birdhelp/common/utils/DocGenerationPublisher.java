@@ -7,6 +7,7 @@ import com.greendam.birdhelp.exception.ErrorCode;
 import com.greendam.birdhelp.model.dto.DocGenerationMessage;
 import com.greendam.birdhelp.model.vo.DocGenerateTaskVO;
 import com.greendam.birdhelp.properties.RabbitMQProperties;
+import com.greendam.birdhelp.service.admin.ApiKeyService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.core.MessageProperties;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Component;
 import javax.annotation.Resource;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -37,6 +39,9 @@ public class DocGenerationPublisher {
     @Resource
     private ObjectMapper objectMapper;
 
+    @Resource
+    private ApiKeyService apiKeyService;
+
     /**
      * 发布 PPT 生成任务。
      */
@@ -44,7 +49,8 @@ public class DocGenerationPublisher {
                                         String language, String style, Integer slideCount,
                                         String extraPrompt, Boolean enableImages,
                                         List<String> materialIds, Boolean ragEnabled,
-                                        String callbackId) {
+                                        String callbackId, String modelName) {
+        Map<String, String> creds = apiKeyService.resolveCredentials(modelName);
         DocGenerationMessage msg = DocGenerationMessage.builder()
                 .version(PROTOCOL_VERSION)
                 .taskId(UUID.randomUUID().toString())
@@ -60,6 +66,9 @@ public class DocGenerationPublisher {
                 .enableImages(enableImages != null ? enableImages : true)
                 .materialIds(materialIds)
                 .ragEnabled(ragEnabled != null ? ragEnabled : false)
+                .apiKey(creds.get("apiKey"))
+                .baseUrl(creds.get("baseUrl"))
+                .modelName(creds.get("modelName"))
                 .timestamp(System.currentTimeMillis())
                 .build();
         send(msg, RabbitMQConfig.RK_PPT, 8);
@@ -77,7 +86,8 @@ public class DocGenerationPublisher {
                                          String language, String docType, Integer wordCount,
                                          String style, String extraPrompt, Boolean enableImages,
                                          List<String> materialIds, Boolean ragEnabled,
-                                         String callbackId) {
+                                         String callbackId, String modelName) {
+        Map<String, String> creds = apiKeyService.resolveCredentials(modelName);
         DocGenerationMessage msg = DocGenerationMessage.builder()
                 .version(PROTOCOL_VERSION)
                 .taskId(UUID.randomUUID().toString())
@@ -94,6 +104,9 @@ public class DocGenerationPublisher {
                 .enableImages(enableImages != null ? enableImages : true)
                 .materialIds(materialIds)
                 .ragEnabled(ragEnabled != null ? ragEnabled : false)
+                .apiKey(creds.get("apiKey"))
+                .baseUrl(creds.get("baseUrl"))
+                .modelName(creds.get("modelName"))
                 .timestamp(System.currentTimeMillis())
                 .build();
         send(msg, RabbitMQConfig.RK_WORD, 3);
@@ -111,7 +124,8 @@ public class DocGenerationPublisher {
                                         String language, String docType,
                                         String style, String extraPrompt, Boolean enableImages,
                                         List<String> materialIds, Boolean ragEnabled,
-                                        String callbackId) {
+                                        String callbackId, String modelName) {
+        Map<String, String> creds = apiKeyService.resolveCredentials(modelName);
         DocGenerationMessage msg = DocGenerationMessage.builder()
                 .version(PROTOCOL_VERSION)
                 .taskId(UUID.randomUUID().toString())
@@ -127,6 +141,9 @@ public class DocGenerationPublisher {
                 .enableImages(enableImages != null ? enableImages : true)
                 .materialIds(materialIds)
                 .ragEnabled(ragEnabled != null ? ragEnabled : false)
+                .apiKey(creds.get("apiKey"))
+                .baseUrl(creds.get("baseUrl"))
+                .modelName(creds.get("modelName"))
                 .timestamp(System.currentTimeMillis())
                 .build();
         send(msg, RabbitMQConfig.RK_PDF, 3);

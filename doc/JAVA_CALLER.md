@@ -536,19 +536,20 @@ signed_json_request("POST", "/api/internal/task/progress", {
 # 获取 LLM API Key
 signed_json_request("POST", "/api/internal/api-key/fetch", {})
 signed_json_request("POST", "/api/internal/api-key/fetch?providerName=openai", {})
-signed_json_request("POST", "/api/internal/api-key/fetch?modelType=chat", {})
 ```
 
 ### 5.6 API Key 获取接口
 
 #### POST /api/internal/api-key/fetch — 获取解密后的 LLM API Key
 
-> Python AI 模块在初始化 LLM 客户端时调用，获取解密的 API Key 和 Base URL。无需每次生成都调用，建议加内存缓存（10 分钟 TTL）。
+> Python AI 模块在启动时初始化 embedding 模型时调用，获取解密的 API Key 和 Base URL。文档生成时的聊天模型凭证已通过
+> RabbitMQ 消息传递，不再需要此接口。
 
 | 参数           | 位置    | 类型     | 必填 | 说明                                   |
 |--------------|-------|--------|----|--------------------------------------|
 | providerName | query | string | 否  | 供应商名称过滤（`openai`、`qwen` 等）           |
-| modelType    | query | string | 否  | 模型类型过滤：`chat`-大语言模型，`embedding`-向量模型 |
+
+> **注意**：`modelType` 参数已移除，所有存储的密钥均为聊天模型。
 
 Body 固定为空 `{}`。
 
@@ -558,12 +559,6 @@ resp = signed_json_request("POST", "/api/internal/api-key/fetch", {})
 
 # 按供应商过滤
 resp = signed_json_request("POST", "/api/internal/api-key/fetch?providerName=openai", {})
-
-# 按模型类型过滤（获取向量模型专用 Key）
-resp = signed_json_request("POST", "/api/internal/api-key/fetch?modelType=embedding", {})
-
-# 组合过滤（获取 OpenAI 的聊天模型 Key）
-resp = signed_json_request("POST", "/api/internal/api-key/fetch?providerName=openai&modelType=chat", {})
 ```
 
 成功响应：
@@ -577,15 +572,13 @@ resp = signed_json_request("POST", "/api/internal/api-key/fetch?providerName=ope
       "providerName": "openai",
       "apiKey": "sk-proj-xxxxxxxxxxxxxxxxxxxx",
       "baseUrl": "https://api.openai.com/v1",
-      "modelName": "gpt-4o",
-      "modelType": "chat"
+      "modelName": "gpt-4o"
     },
     {
       "providerName": "openai",
       "apiKey": "sk-proj-xxxxxxxxxxxxxxxxxxxx",
       "baseUrl": "https://api.openai.com/v1",
-      "modelName": "text-embedding-3-small",
-      "modelType": "embedding"
+      "modelName": "text-embedding-3-small"
     }
   ]
 }

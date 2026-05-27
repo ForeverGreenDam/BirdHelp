@@ -15,7 +15,6 @@ import javax.validation.constraints.NotBlank;
  *   <li>{@code apiKey} - API 密钥原文，不能为空</li>
  *   <li>{@code baseUrl} - 供应商 API 的基础地址，不能为空</li>
  *   <li>{@code modelName} - 模型名称，例如 {@code "gpt-4o"}、{@code "claude-3-opus"}</li>
- *   <li>{@code modelType} - 模型类型分类，如 {@code "text"}、{@code "image"}</li>
  *   <li>{@code description} - 密钥备注说明</li>
  * </ul>
  *
@@ -45,11 +44,6 @@ public class ApiKeyCreateDTO {
      * 模型名称，例如 {@code "gpt-4o"}、{@code "claude-3-opus"}。
      */
     private String modelName;
-
-    /**
-     * 模型类型分类，如 {@code "text"}、{@code "image"}。
-     */
-    private String modelType;
 
     /**
      * 密钥备注说明。

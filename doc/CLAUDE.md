@@ -94,9 +94,10 @@ but use different secret keys (userSecretKey vs adminSecretKey). User TTL: 1 hou
 requires `userType=2`. Admin-only code lives in `admin/` subdirectories under controller/, service/, model/dto/,
 model/vo/.
 
-**API Key management:** LLM API keys are stored AES-encrypted in the `api_key` table. The Python AI module fetches
-decrypted keys via `POST /internal/api-key/fetch` (RSA-signed). Each key record includes `baseUrl`, `modelName`, and
-`modelType` (`chat` or `embedding`), so Python needs no hardcoded URLs or keys.
+**API Key management:** LLM API keys are stored AES-encrypted in the `api_key` table (chat models only;
+embedding model is hardcoded in Python). Document generation credentials (`apiKey`, `baseUrl`, `modelName`) are
+passed directly via RabbitMQ messages, so Python no longer calls `/internal/api-key/fetch` for each generation.
+The fetch endpoint is only used at startup to initialize the embedding model.
 
 **RabbitMQ async document generation:** PPT/Word/PDF generation is now asynchronous. Controllers publish messages to
 exchange `birdhelp.doc.generation` with routing keys `doc.generate.ppt`/`word`/`pdf`. Python AI module consumes from

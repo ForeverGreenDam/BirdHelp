@@ -94,6 +94,9 @@ birdhelp.doc.generation.dlx  →  doc.generate.dlq  →  birdhelp.doc.generation
 | `userId`     | string  | **是** | 用户 ID（Java 端为 Long，传字符串避免精度问题）                 |
 | `projectId`  | string  | **是** | 项目 ID，用于知识库隔离和文件归属                             |
 | `topic`      | string  | **是** | 文档主题/标题，非空，最大 500 字符                           |
+| `apiKey`     | string  | **是** | LLM API 密钥，明文。由 Java 从数据库解密后传入，Python 直接使用     |
+| `baseUrl`    | string  | **是** | LLM API 基础地址                                   |
+| `modelName`  | string  | **是** | 使用的模型名称                                        |
 | `language`   | string  | **是** | 语言，枚举：`"zh"` \| `"en"`                         |
 | `ragEnabled` | boolean | **是** | 是否启用 RAG 检索。false 时忽略 materialIds              |
 | `timestamp`  | number  | **是** | 消息生产时间戳（毫秒），用于延迟监控，非签名用                        |
@@ -141,6 +144,9 @@ birdhelp.doc.generation.dlx  →  doc.generate.dlq  →  birdhelp.doc.generation
   "userId": "42",
   "projectId": "100",
   "topic": "人工智能技术综述",
+  "apiKey": "sk-xxxx",
+  "baseUrl": "https://api.openai.com/v1",
+  "modelName": "gpt-4o",
   "language": "zh",
   "extraPrompt": "每页不超过5个要点",
   "materialIds": [
@@ -166,6 +172,9 @@ birdhelp.doc.generation.dlx  →  doc.generate.dlq  →  birdhelp.doc.generation
   "userId": "42",
   "projectId": "100",
   "topic": "深度学习在NLP中的应用",
+  "apiKey": "sk-xxxx",
+  "baseUrl": "https://api.openai.com/v1",
+  "modelName": "gpt-4o",
   "language": "zh",
   "extraPrompt": null,
   "materialIds": null,
@@ -189,6 +198,9 @@ birdhelp.doc.generation.dlx  →  doc.generate.dlq  →  birdhelp.doc.generation
   "userId": "42",
   "projectId": "100",
   "topic": "2025年度项目报告",
+  "apiKey": "sk-xxxx",
+  "baseUrl": "https://api.openai.com/v1",
+  "modelName": "gpt-4o",
   "language": "zh",
   "extraPrompt": null,
   "materialIds": null,
@@ -490,11 +502,12 @@ Java 端需与 Python 端使用相同的连接参数：
 1. 接收消息
 2. 校验 version → 不支持则 NACK(requeue=false)
 3. 校验 docType → 不支持则 NACK(requeue=false)
-4. 校验必填字段 → 缺失则 NACK(requeue=false)
-5. 调用 Java 扣减额度 → 失败则回调 Java (errorCode=2001) + ACK
-6. 执行 LangGraph 生成流程（含 QA）
-7. 上传文件到 Java → 失败则 NACK(requeue=true)
-8. 回调 Java 任务完成 → ACK
+4. 校验必填字段（含 apiKey/baseUrl/modelName）→ 缺失则 NACK(requeue=false)
+5. 从消息体读取 apiKey/baseUrl/modelName — 直接使用，无需额外请求
+6. 调用 Java 扣减额度 → 失败则回调 Java (errorCode=2001) + ACK
+7. 执行 LangGraph 生成流程（含 QA）
+8. 上传文件到 Java → 失败则 NACK(requeue=true)
+9. 回调 Java 任务完成 → ACK
 ```
 
 ### 9.3 新增配置项

@@ -389,17 +389,17 @@ Java 后端（本工程）                  AI 模块（另建工程）
 
 所有内部接口均通过 `/internal/*` 路径，使用 RSA 签名校验（`X-Timestamp` + `X-Nonce` + `X-Signature`）替代 JWT 鉴权。
 
-| 方法     | 路径                           | 用途                                     |
-|--------|------------------------------|----------------------------------------|
-| POST   | /internal/quota/consume      | AI 生成前扣减额度                             |
-| POST   | /internal/quota/refund       | 生成失败退还额度                               |
-| POST   | /internal/file/upload        | AI 模块上传文件（素材 / 生成结果，Body 含 project_id） |
-| GET    | /internal/file/{id}/download | AI 模块下载文件（向量化等处理用）                     |
-| GET    | /internal/file/list          | AI 模块代理查询文件列表（Query 含 project_id）      |
-| DELETE | /internal/file/{id}          | AI 模块软删除文件，移入回收站（Query 含 userId）       |
-| POST   | /internal/task/callback      | 接收文档生成任务完成/失败回调                        |
-| POST   | /internal/task/progress      | 接收文档生成任务进度通知（可选）                       |
-| POST   | /internal/api-key/fetch      | AI 模块获取解密后的 LLM API Key 及 Base URL     |
+| 方法     | 路径                           | 用途                                                                   |
+|--------|------------------------------|----------------------------------------------------------------------|
+| POST   | /internal/quota/consume      | AI 生成前扣减额度                                                           |
+| POST   | /internal/quota/refund       | 生成失败退还额度                                                             |
+| POST   | /internal/file/upload        | AI 模块上传文件（素材 / 生成结果，Body 含 project_id）                               |
+| GET    | /internal/file/{id}/download | AI 模块下载文件（向量化等处理用）                                                   |
+| GET    | /internal/file/list          | AI 模块代理查询文件列表（Query 含 project_id）                                    |
+| DELETE | /internal/file/{id}          | AI 模块软删除文件，移入回收站（Query 含 userId）                                     |
+| POST   | /internal/task/callback      | 接收文档生成任务完成/失败回调                                                      |
+| POST   | /internal/task/progress      | 接收文档生成任务进度通知（可选）                                                     |
+| POST   | /internal/api-key/fetch      | AI 模块获取解密后的 LLM API Key（启动时用于 embedding 模型初始化，生成时凭证已由 RabbitMQ 消息传递） |
 
 ### 7.4 Java 后端调用 AI 模块的内部接口
 
@@ -632,7 +632,6 @@ CREATE TABLE `api_key` (
     `api_key` varchar(2000) NOT NULL COMMENT '加密后的API密钥值',
     `base_url` varchar(500) DEFAULT '' COMMENT 'API基础地址',
     `model_name` varchar(100) DEFAULT '' COMMENT '关联模型名称',
-    `model_type` varchar(20) DEFAULT 'chat' COMMENT '模型类型: chat-大语言模型, embedding-向量模型',
     `enabled` tinyint DEFAULT 1 COMMENT '启用状态 0-禁用 1-启用',
     `description` varchar(255) DEFAULT '' COMMENT '备注说明',
     `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -642,8 +641,7 @@ CREATE TABLE `api_key` (
     `del_flag` tinyint DEFAULT 0,
     PRIMARY KEY (`id`),
     KEY `idx_provider_name` (`provider_name`),
-    KEY `idx_enabled` (`enabled`),
-    KEY `idx_model_type` (`model_type`)
+    KEY `idx_enabled` (`enabled`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='LLM API密钥配置表';
 ```
 
@@ -653,7 +651,7 @@ CREATE TABLE `api_key` (
 |------|-----------------------------|-----------------------|
 | POST | /api/internal/api-key/fetch | Python 获取解密密钥（RSA 签名） |
 
-参数：`providerName`（可选）、`modelType`（可选，`chat` / `embedding`）。返回解密后的 apiKey、baseUrl、modelName、modelType。
+参数：`providerName`（可选）。`modelType` 已移除，所有存储的密钥均为聊天模型。返回解密后的 apiKey、baseUrl、modelName。
 
 ---
 

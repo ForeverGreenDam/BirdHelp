@@ -47,7 +47,8 @@ public class PptController {
                 dto.getEnableImages(),
                 dto.getMaterialIds(),
                 dto.getRagEnabled(),
-                callbackId
+                callbackId,
+                dto.getModelName()
         );
         return BaseResponse.success(task);
     }

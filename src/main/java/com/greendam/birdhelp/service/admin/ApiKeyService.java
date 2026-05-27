@@ -96,16 +96,36 @@ public interface ApiKeyService extends IService<ApiKey> {
     void toggleEnabled(Long id, Boolean enabled);
 
     /**
-     * 根据提供商名称和模型类型查询已解密的密钥列表。
+     * 根据提供商名称查询已解密的密钥列表。
      * <p>
      * 该方法仅返回已启用（{@code enabled = 1}）的密钥，并且返回的
      * {@code apiKey} 字段为解密后的明文，供AI服务调用时直接使用。
-     * 参数均支持为空，为空时不作为过滤条件。
+     * 参数支持为空，为空时不作为过滤条件。
      * </p>
      *
      * @param providerName 提供商名称（可选，为空或空字符串时不以此条件过滤）
-     * @param modelType    模型类型（可选，为空或空字符串时不以此条件过滤）
-     * @return 包含已解密密钥信息的列表，每项包含 providerName、apiKey、baseUrl、modelName、modelType 字段
+     * @return 包含已解密密钥信息的列表，每项包含 providerName、apiKey、baseUrl、modelName 字段
      */
-    List<Map<String, Object>> fetchDecryptedKeys(String providerName, String modelType);
+    List<Map<String, Object>> fetchDecryptedKeys(String providerName);
+
+    /**
+     * <p>根据模型名称解析 LLM 调用凭证。</p>
+     *
+     * <p>若指定 modelName，则查找匹配该名称且已启用的密钥；若未指定或未找到，则返回第一个已启用的密钥。
+     * 返回的 Map 包含 apiKey（明文）、baseUrl、modelName 三个字段。</p>
+     *
+     * @param modelName 模型名称（可选，为 null 或空字符串时使用第一个可用密钥）
+     * @return 包含 {@code apiKey}、{@code baseUrl}、{@code modelName} 的凭证 Map
+     * @throws BusinessException 如果没有已启用的密钥
+     */
+    Map<String, String> resolveCredentials(String modelName);
+
+    /**
+     * <p>获取当前可用的模型列表，供前端下拉框选择。</p>
+     *
+     * <p>仅返回已启用（{@code enabled = 1}）的模型，不包含 API Key 等敏感信息。</p>
+     *
+     * @return 模型列表，每项包含 {@code modelName}、{@code providerName}、{@code description}
+     */
+    List<Map<String, String>> listAvailableModels();
 }

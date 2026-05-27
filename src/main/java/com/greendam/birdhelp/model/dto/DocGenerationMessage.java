@@ -66,6 +66,18 @@ public class DocGenerationMessage {
      * 是否自动搜索配图
      */
     private Boolean enableImages;
+    /**
+     * 解密后的 LLM API 密钥
+     */
+    private String apiKey;
+    /**
+     * LLM API 基础地址
+     */
+    private String baseUrl;
+    /**
+     * 使用的 LLM 模型名称
+     */
+    private String modelName;
 
     // ---- PPT 专属 ----
     /**

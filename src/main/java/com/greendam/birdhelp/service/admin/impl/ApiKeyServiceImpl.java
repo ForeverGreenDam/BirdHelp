@@ -53,7 +53,6 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey> impleme
                 .apiKeyMasked(maskKey(""))
                 .baseUrl(e.getBaseUrl())
                 .modelName(e.getModelName())
-                .modelType(e.getModelType())
                 .enabled(e.getEnabled())
                 .description(e.getDescription())
                 .createTime(e.getCreateTime())
@@ -75,7 +74,6 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey> impleme
                 .apiKeyMasked(maskKey(decrypted))
                 .baseUrl(entity.getBaseUrl())
                 .modelName(entity.getModelName())
-                .modelType(entity.getModelType())
                 .enabled(entity.getEnabled())
                 .description(entity.getDescription())
                 .createTime(entity.getCreateTime())
@@ -90,11 +88,10 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey> impleme
         entity.setApiKey(encryptKey(dto.getApiKey()));
         entity.setBaseUrl(dto.getBaseUrl());
         entity.setModelName(dto.getModelName());
-        entity.setModelType(dto.getModelType() != null ? dto.getModelType() : "chat");
         entity.setDescription(dto.getDescription());
         entity.setEnabled(1);
         save(entity);
-        log.info("创建API密钥: provider={}, baseUrl={}, model={}, modelType={}", dto.getProviderName(), dto.getBaseUrl(), dto.getModelName(), dto.getModelType());
+        log.info("创建API密钥: provider={}, baseUrl={}, model={}", dto.getProviderName(), dto.getBaseUrl(), dto.getModelName());
     }
 
     @Override
@@ -107,7 +104,6 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey> impleme
         if (dto.getApiKey() != null) entity.setApiKey(encryptKey(dto.getApiKey()));
         if (dto.getBaseUrl() != null) entity.setBaseUrl(dto.getBaseUrl());
         if (dto.getModelName() != null) entity.setModelName(dto.getModelName());
-        if (dto.getModelType() != null) entity.setModelType(dto.getModelType());
         if (dto.getDescription() != null) entity.setDescription(dto.getDescription());
         updateById(entity);
         log.info("更新API密钥: id={}", dto.getId());
@@ -131,14 +127,11 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey> impleme
     }
 
     @Override
-    public List<Map<String, Object>> fetchDecryptedKeys(String providerName, String modelType) {
+    public List<Map<String, Object>> fetchDecryptedKeys(String providerName) {
         LambdaQueryWrapper<ApiKey> wrapper = new LambdaQueryWrapper<ApiKey>()
                 .eq(ApiKey::getEnabled, 1);
         if (providerName != null && !providerName.isEmpty()) {
             wrapper.eq(ApiKey::getProviderName, providerName);
-        }
-        if (modelType != null && !modelType.isEmpty()) {
-            wrapper.eq(ApiKey::getModelType, modelType);
         }
         List<ApiKey> keys = list(wrapper);
         List<Map<String, Object>> result = new ArrayList<>();
@@ -148,7 +141,45 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey> impleme
             item.put("apiKey", decryptKey(k.getApiKey()));
             item.put("baseUrl", k.getBaseUrl());
             item.put("modelName", k.getModelName());
-            item.put("modelType", k.getModelType());
+            result.add(item);
+        }
+        return result;
+    }
+
+    @Override
+    public Map<String, String> resolveCredentials(String modelName) {
+        List<ApiKey> keys = list(new LambdaQueryWrapper<ApiKey>().eq(ApiKey::getEnabled, 1));
+        if (keys.isEmpty()) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "没有可用的LLM API密钥，请联系管理员配置");
+        }
+        ApiKey target;
+        if (modelName != null && !modelName.isEmpty()) {
+            target = keys.stream()
+                    .filter(k -> modelName.equals(k.getModelName()))
+                    .findFirst()
+                    .orElse(keys.get(0));
+        } else {
+            target = keys.get(0);
+        }
+        Map<String, String> result = new LinkedHashMap<>();
+        result.put("apiKey", decryptKey(target.getApiKey()));
+        result.put("baseUrl", target.getBaseUrl());
+        result.put("modelName", target.getModelName());
+        log.info("解析LLM凭证: requested={}, resolved={}", modelName, target.getModelName());
+        return result;
+    }
+
+    @Override
+    public List<Map<String, String>> listAvailableModels() {
+        List<ApiKey> keys = list(new LambdaQueryWrapper<ApiKey>()
+                .eq(ApiKey::getEnabled, 1)
+                .orderByAsc(ApiKey::getProviderName));
+        List<Map<String, String>> result = new ArrayList<>();
+        for (ApiKey k : keys) {
+            Map<String, String> item = new LinkedHashMap<>();
+            item.put("modelName", k.getModelName());
+            item.put("providerName", k.getProviderName());
+            item.put("description", k.getDescription() != null ? k.getDescription() : "");
             result.add(item);
         }
         return result;

@@ -69,4 +69,8 @@ public class GenerateWordDTO {
      * 是否启用 RAG 检索增强，默认 false
      */
     private Boolean ragEnabled;
+    /**
+     * 使用的 LLM 模型名称（可选，不指定则使用第一个启用的模型）
+     */
+    private String modelName;
 }

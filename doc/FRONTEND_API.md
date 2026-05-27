@@ -428,6 +428,7 @@ POST /ppt/generate
 |----------------|--------|:--:|------------|--------------------------------------------------------------------------------------|
 | `projectId`    | string | 是  | —          | 项目 ID                                                                                |
 | `topic`        | string | 是  | —          | PPT 主题，最长 200 字符                                                                     |
+| `modelName`    | string | 否  | `gpt-4o`   | 使用的 LLM 模型名称，默认由后端根据可用密钥自动选择                                                         |
 | `language`     | string | 否  | `zh`       | `zh` 中文 / `en` 英文                                                                    |
 | `style`        | string | 否  | `academic` | `academic` 学术 / `business` 商务 / `creative` 创意 / `minimal` 极简 / `tech` 科技 / `warm` 暖色 |
 | `slideCount`   | int    | 否  | `10`       | 页数（含封面和结束页），范围 1–50                                                                  |
@@ -440,6 +441,7 @@ POST /ppt/generate
 {
   "projectId": "1",
   "topic": "Java基础语法教学",
+  "modelName": "gpt-4o",
   "language": "zh",
   "style": "academic",
   "slideCount": 10,
@@ -579,6 +581,7 @@ POST /word/generate
 |----------------|--------|:--:|------------|--------------------------------------------------------------------------------------|
 | `projectId`    | string | 是  | —          | 项目 ID                                                                                |
 | `topic`        | string | 是  | —          | 文档主题，最长 200 字符                                                                       |
+| `modelName`    | string | 否  | `gpt-4o`   | 使用的 LLM 模型名称，默认由后端根据可用密钥自动选择                                                         |
 | `language`     | string | 否  | `zh`       | `zh` 中文 / `en` 英文                                                                    |
 | `docType`      | string | 否  | `essay`    | `essay` 论文 / `report` 报告 / `letter` 信函 / `paper` 学术论文                                |
 | `wordCount`    | int    | 否  | `2000`     | 目标字数，范围 500–10000                                                                    |
@@ -592,6 +595,7 @@ POST /word/generate
 {
   "projectId": "1",
   "topic": "人工智能发展报告",
+  "modelName": "gpt-4o",
   "language": "zh",
   "docType": "report",
   "wordCount": 3000,
@@ -642,6 +646,7 @@ POST /pdf/generate
 |----------------|--------|:--:|------------|--------------------------------------------------------------------------------------|
 | `projectId`    | string | 是  | —          | 项目 ID                                                                                |
 | `topic`        | string | 是  | —          | 文档主题，最长 200 字符                                                                       |
+| `modelName`    | string | 否  | `gpt-4o`   | 使用的 LLM 模型名称，默认由后端根据可用密钥自动选择                                                         |
 | `language`     | string | 否  | `zh`       | `zh` 中文 / `en` 英文                                                                    |
 | `docType`      | string | 否  | `report`   | `report` 报告 / `resume` 简历 / `form` 表单                                                |
 | `style`        | string | 否  | `academic` | `academic` 学术 / `business` 商务 / `creative` 创意 / `minimal` 极简 / `tech` 科技 / `warm` 暖色 |
@@ -654,6 +659,7 @@ POST /pdf/generate
 {
   "projectId": "1",
   "topic": "年度工作总结",
+  "modelName": "gpt-4o",
   "language": "zh",
   "docType": "report",
   "style": "business",
@@ -927,7 +933,7 @@ GET /admin/api-key/list?page=1&size=10
 GET /admin/api-key/{id}
 ```
 
-返回完整 `apiKeyMasked`、`baseUrl`、`modelName`、`modelType`。
+返回完整 `apiKeyMasked`、`baseUrl`、`modelName`。
 
 ### 12.3 新增 Key
 
@@ -941,12 +947,11 @@ POST /admin/api-key
   "apiKey": "sk-proj-xxxxxxxxxxxx",
   "baseUrl": "https://api.openai.com/v1",
   "modelName": "gpt-4o",
-  "modelType": "chat",
   "description": "OpenAI GPT-4o 生产密钥"
 }
 ```
 
-`modelType`: `chat`-大语言模型，`embedding`-向量模型。默认 `chat`。
+`modelType`: 已移除。所有密钥均为聊天模型（嵌入向量模型在 Python 端硬编码）。
 
 ### 12.4 修改 Key
 

@@ -1,5 +1,8 @@
 # Python AI Module 集成 API Key 获取指南
 
+> **2026-05-27 更新**：文档生成时的聊天模型凭证现在直接通过 RabbitMQ 消息传递（含 apiKey/baseUrl/modelName），Python
+> 端无需在生成时调用此接口。此接口仅用于 embedding 模型初始化（向量模型固定，直接在 Python 端启动时调用一次即可）。
+
 ## 背景
 
 原先 Python AI 模块的 LLM API Key 是写在 `.env` 文件中的，这种方式存在以下问题：
@@ -44,16 +47,14 @@ POST\n/internal/api-key/fetch\n\n1700000000\nrandom-nonce-123
 | 参数           | 类型     | 必填 | 说明                                           |
 |--------------|--------|----|----------------------------------------------|
 | providerName | String | 否  | 供应商名称过滤（如 `openai`、`qwen`），不传返回全部            |
-| modelType    | String | 否  | 模型类型过滤：`chat`-大语言模型, `embedding`-向量模型，不传返回全部 |
+
+> **注意**：`modelType` 参数已移除，所有存储的密钥均为聊天模型。向量模型密钥在 Python 端启动时硬编码调用一次即可。
 
 **请求示例**：
 
-```python
+```
 # 获取 OpenAI 的聊天模型 Key
-POST /api/internal/api-key/fetch?providerName=openai&modelType=chat
-
-# 获取所有向量模型 Key
-POST /api/internal/api-key/fetch?modelType=embedding
+POST /api/internal/api-key/fetch?providerName=openai
 ```
 
 **响应格式**：
@@ -67,28 +68,25 @@ POST /api/internal/api-key/fetch?modelType=embedding
       "providerName": "openai",
       "apiKey": "sk-proj-xxxxxxxxxxxxxxxxxxxx",
       "baseUrl": "https://api.openai.com/v1",
-      "modelName": "gpt-4o",
-      "modelType": "chat"
+      "modelName": "gpt-4o"
     },
     {
       "providerName": "qwen",
       "apiKey": "sk-xxxxxxxxxxxxxxxxxxxxxxxx",
       "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      "modelName": "qwen-max",
-      "modelType": "chat"
+      "modelName": "qwen-max"
     },
     {
       "providerName": "openai",
       "apiKey": "sk-proj-xxxxxxxxxxxxxxxxxxxx",
       "baseUrl": "https://api.openai.com/v1",
-      "modelName": "text-embedding-3-small",
-      "modelType": "embedding"
+      "modelName": "text-embedding-3-small"
     }
   ]
 }
 ```
 
-响应中的 `apiKey` 已经是解密后的明文，同时返回 `baseUrl` 和 `modelType`，Python 端无需硬编码任何地址。
+响应中的 `apiKey` 已经是解密后的明文，同时返回 `baseUrl` 和 `modelName`，Python 端无需硬编码任何地址。
 
 ## Python 端实现示例
 
@@ -122,14 +120,12 @@ def _sign_request(method: str, path: str, body: str = "") -> dict:
     }
 
 
-def fetch_api_keys(provider_name: str = None, model_type: str = None) -> list[dict]:
+def fetch_api_keys(provider_name: str = None) -> list[dict]:
     """从 Java 后端获取解密的 API Key 列表"""
     path = "/internal/api-key/fetch"
     params = []
     if provider_name:
         params.append(f"providerName={provider_name}")
-    if model_type:
-        params.append(f"modelType={model_type}")
     if params:
         path += "?" + "&".join(params)
 
@@ -147,11 +143,11 @@ def fetch_api_keys(provider_name: str = None, model_type: str = None) -> list[di
     return result["data"]
 
 
-def get_client_config(provider_name: str, model_type: str = "chat") -> dict | None:
-    """获取指定供应商和模型类型的完整客户端配置（apiKey + baseUrl）"""
-    keys = fetch_api_keys(provider_name, model_type)
+def get_client_config(provider_name: str) -> dict | None:
+    """获取指定供应商的完整客户端配置（apiKey + baseUrl）"""
+    keys = fetch_api_keys(provider_name)
     if keys:
-        return keys[0]  # 返回 {apiKey, baseUrl, modelName, modelType, ...}
+        return keys[0]  # 返回 {apiKey, baseUrl, modelName, ...}
     return None
 ```
 
@@ -190,7 +186,7 @@ RSA_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----
 # 新代码（动态获取方式 — 密钥和地址都从后端获取）
 from api_key_client import get_client_config
 
-config = get_client_config("openai", "chat")  # modelType: chat=大语言模型, embedding=向量模型
+config = get_client_config("openai")
 client = OpenAI(api_key=config["apiKey"], base_url=config["baseUrl"])
 ```
 
@@ -204,7 +200,8 @@ client = OpenAI(api_key=config["apiKey"], base_url=config["baseUrl"])
 # )
 
 # 新代码
-config = get_client_config("openai", "embedding")
+# 注意：embedding 模型密钥在启动时硬编码初始化，此处仅作示例
+config = get_client_config("openai")
 embedding_client = OpenAIEmbeddings(api_key=config["apiKey"], base_url=config["baseUrl"])
 ```
 
@@ -220,14 +217,14 @@ _cache: dict = {}
 _cache_lock = threading.Lock()
 _CACHE_TTL = 600  # 10 分钟
 
-def get_client_config_cached(provider_name: str, model_type: str = "chat") -> dict | None:
-    cache_key = f"{provider_name}:{model_type}"
+def get_client_config_cached(provider_name: str) -> dict | None:
+    cache_key = f"{provider_name}:chat"
     with _cache_lock:
         entry = _cache.get(cache_key)
         if entry and time.time() - entry["ts"] < _CACHE_TTL:
             return entry["config"]
 
-    config = get_client_config(provider_name, model_type)
+    config = get_client_config(provider_name)
     if config:
         with _cache_lock:
             _cache[cache_key] = {"config": config, "ts": time.time()}
@@ -244,21 +241,21 @@ def get_client_config_cached(provider_name: str, model_type: str = "chat") -> di
 
 管理员登录 BirdHelp 后台后，在 "API Key 管理" 菜单中可以进行以下操作：
 
-- **新增 Key**：填写供应商名称、Base URL、API Key 明文、模型名称、模型类型（chat / embedding）→ 保存后自动加密存储
-- **编辑 Key**：修改 Key 值、Base URL、模型名称、模型类型
+- **新增 Key**：填写供应商名称、Base URL、API Key 明文、模型名称 → 保存后自动加密存储（所有密钥均为聊天模型）
+- **编辑 Key**：修改 Key 值、Base URL、模型名称
 - **启用/禁用**：临时关闭某个 Key 而不删除
 - **删除**：彻底移除不再使用的 Key
 - **查看**：列表中只显示脱敏信息（前4位+后4位），详情页可查看完整 Key
 
 ### 关键字段说明
 
-| 字段           | 说明                        | 示例                                 |
-|--------------|---------------------------|------------------------------------|
-| providerName | 供应商名称                     | `openai`, `qwen`, `zhipu`          |
-| baseUrl      | API 基础地址                  | `https://api.openai.com/v1`        |
-| apiKey       | API 密钥（明文输入，自动加密存储）       | `sk-xxxx`                          |
-| modelName    | 模型名称                      | `gpt-4o`, `text-embedding-3-small` |
-| modelType    | 模型类型：`chat` 或 `embedding` | 大语言模型填 `chat`，向量模型填 `embedding`    |
+| 字段           | 说明                  | 示例                                      |
+|--------------|---------------------|-----------------------------------------|
+| providerName | 供应商名称               | `openai`, `qwen`, `zhipu`               |
+| baseUrl      | API 基础地址            | `https://api.openai.com/v1`             |
+| apiKey       | API 密钥（明文输入，自动加密存储） | `sk-xxxx`                               |
+| modelName    | 模型名称                | `gpt-4o`, `text-embedding-3-small`      |
+| modelType    | 模型类型                | 已移除，所有存储的密钥均为聊天模型（嵌入向量模型已在 Python 端硬编码） |
 
-同一个供应商如果有多个模型类型（如 OpenAI 的聊天模型和向量模型），只需创建两条记录，分别指定不同的 `modelType` 和
-`modelName`，`baseUrl` 和 `apiKey` 可以相同。
+> **2026-05-27**：`modelType` 字段已移除，`api_key` 表仅存储聊天模型密钥。嵌入向量模型（如 `text-embedding-3-small`）在
+> Python 端启动时硬编码获取一次即可。
