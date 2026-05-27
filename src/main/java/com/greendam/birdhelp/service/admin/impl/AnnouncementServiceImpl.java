@@ -58,7 +58,6 @@ public class AnnouncementServiceImpl extends ServiceImpl<AnnouncementMapper, Ann
         entity.setTitle(dto.getTitle());
         entity.setContent(dto.getContent());
         entity.setStatus(dto.getStatus() != null ? dto.getStatus() : 0);
-        entity.setPublishTime(dto.getPublishTime());
         save(entity);
         log.info("创建公告: title={}", dto.getTitle());
     }
@@ -71,8 +70,12 @@ public class AnnouncementServiceImpl extends ServiceImpl<AnnouncementMapper, Ann
         }
         if (dto.getTitle() != null) entity.setTitle(dto.getTitle());
         if (dto.getContent() != null) entity.setContent(dto.getContent());
-        if (dto.getStatus() != null) entity.setStatus(dto.getStatus());
-        if (dto.getPublishTime() != null) entity.setPublishTime(dto.getPublishTime());
+        if (dto.getStatus() != null) {
+            if (dto.getStatus() == 1 && (entity.getStatus() == null || entity.getStatus() != 1)) {
+                entity.setPublishTime(LocalDateTime.now());
+            }
+            entity.setStatus(dto.getStatus());
+        }
         updateById(entity);
         log.info("更新公告: id={}", dto.getId());
     }

@@ -2,9 +2,11 @@ package com.greendam.birdhelp.controller.admin;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.greendam.birdhelp.common.BaseResponse;
+import com.greendam.birdhelp.common.context.BaseContext;
 import com.greendam.birdhelp.model.dto.admin.AdminUserUpdateDTO;
 import com.greendam.birdhelp.model.vo.admin.AdminUserVO;
 import com.greendam.birdhelp.service.SysUserService;
+import com.greendam.birdhelp.service.admin.OperationLogService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
@@ -29,6 +31,9 @@ public class AdminUserController {
 
     @Resource
     private SysUserService sysUserService;
+
+    @Resource
+    private OperationLogService operationLogService;
 
     /**
      * <p>分页查询用户列表，支持多条件筛选。</p>
@@ -80,6 +85,8 @@ public class AdminUserController {
     @PutMapping("/{id}/status")
     public BaseResponse<Void> updateStatus(@PathVariable Long id, @RequestParam Integer status) {
         sysUserService.adminUpdateStatus(id, status);
+        operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
+                "UPDATE", "user", id.toString(), status == 1 ? "启用用户" : "封禁用户");
         return BaseResponse.success();
     }
 
@@ -95,6 +102,8 @@ public class AdminUserController {
     @PutMapping("/{id}")
     public BaseResponse<Void> updateInfo(@PathVariable Long id, @RequestBody AdminUserUpdateDTO dto) {
         sysUserService.adminUpdateUser(id, dto);
+        operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
+                "UPDATE", "user", id.toString(), "修改用户信息");
         return BaseResponse.success();
     }
 
@@ -110,6 +119,8 @@ public class AdminUserController {
     @PutMapping("/{id}/password")
     public BaseResponse<Void> resetPassword(@PathVariable Long id, @RequestParam String newPassword) {
         sysUserService.adminResetPassword(id, newPassword);
+        operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
+                "UPDATE", "user", id.toString(), "重置密码");
         return BaseResponse.success();
     }
 
@@ -124,6 +135,8 @@ public class AdminUserController {
     @PutMapping("/{id}/role")
     public BaseResponse<Void> setRole(@PathVariable Long id, @RequestParam Integer userType) {
         sysUserService.adminSetUserRole(id, userType);
+        operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
+                "UPDATE", "user", id.toString(), userType == 2 ? "设为管理员" : "取消管理员");
         return BaseResponse.success();
     }
 }

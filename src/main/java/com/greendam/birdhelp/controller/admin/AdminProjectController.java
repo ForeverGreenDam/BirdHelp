@@ -2,8 +2,10 @@ package com.greendam.birdhelp.controller.admin;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.greendam.birdhelp.common.BaseResponse;
+import com.greendam.birdhelp.common.context.BaseContext;
 import com.greendam.birdhelp.model.entity.Project;
 import com.greendam.birdhelp.service.ProjectService;
+import com.greendam.birdhelp.service.admin.OperationLogService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,6 +32,9 @@ public class AdminProjectController {
 
     @Resource
     private ProjectService projectService;
+
+    @Resource
+    private OperationLogService operationLogService;
 
     /**
      * <p>分页查询项目列表。</p>
@@ -75,6 +80,8 @@ public class AdminProjectController {
     @DeleteMapping("/{id}")
     public BaseResponse<Void> delete(@PathVariable Long id) {
         projectService.adminDeleteProject(id);
+        operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
+                "DELETE", "project", id.toString(), "删除项目");
         return BaseResponse.success();
     }
 }

@@ -842,6 +842,10 @@ GET /admin/user/{id}
 PUT /admin/user/{id}/status?status=0
 ```
 
+| 参数     | 类型  | 必填 | 说明        |
+|--------|-----|:--:|-----------|
+| status | int | 是  | 0-禁用，1-正常 |
+
 ### 10.4 修改用户信息
 
 ```
@@ -856,11 +860,25 @@ PUT /admin/user/{id}
 | sex      | int    | 否  | 0-未知 1-男 2-女 |
 | birthday | string | 否  | `yyyy-MM-dd` |
 
+```json
+{
+  "nickname": "张三丰",
+  "phone": "13900139000",
+  "email": "newemail@example.com",
+  "sex": 1,
+  "birthday": "2000-06-15"
+}
+```
+
 ### 10.5 重置密码
 
 ```
 PUT /admin/user/{id}/password?newPassword=abc123
 ```
+
+| 参数          | 类型     | 必填 | 说明          |
+|-------------|--------|:--:|-------------|
+| newPassword | string | 是  | 新密码，6-100 位 |
 
 ### 10.6 设置角色
 
@@ -868,7 +886,9 @@ PUT /admin/user/{id}/password?newPassword=abc123
 PUT /admin/user/{id}/role?userType=2
 ```
 
-`userType`: 1-普通用户，2-管理员
+| 参数       | 类型  | 必填 | 说明           |
+|----------|-----|:--:|--------------|
+| userType | int | 是  | 1-普通用户，2-管理员 |
 
 ---
 
@@ -903,28 +923,49 @@ PUT /admin/quota/config
 GET /admin/quota/user/list?page=1&size=10&userId=1&memberLevel=1
 ```
 
-响应 `BaseResponse<Page<AdminUserQuotaVO>>`（含 username、nickname、memberLevel、dailyUsed、dailyLimit 等）
+| 参数          | 类型   | 必填 | 说明          |
+|-------------|------|:--:|-------------|
+| page        | int  | 否  | 页码，默认 1     |
+| size        | int  | 否  | 每页条数，默认 10  |
+| userId      | long | 否  | 按用户 ID 精确筛选 |
+| memberLevel | int  | 否  | 按会员等级筛选     |
 
-### 11.4 手动调整额度
-
-```
-PUT /admin/quota/user/adjust
-```
+响应 `BaseResponse<Page<AdminUserQuotaVO>>`：
 
 ```json
 {
-  "userId": 1,
-  "changeAmount": 5
+  "code": 0,
+  "data": {
+    "current": 1,
+    "size": 10,
+    "total": 100,
+    "records": [
+      {
+        "userId": "1",
+        "username": "zhangsan",
+        "nickname": "张三",
+        "memberLevel": 1,
+        "memberExpireAt": "2026-06-16T10:00:00",
+        "dailyUsed": 5,
+        "dailyLimit": 30,
+        "dailyDate": "2026-05-27"
+      }
+    ]
+  }
 }
 ```
 
-`changeAmount` 正数为增加，负数为扣减。
-
-### 11.5 修改会员等级
+### 11.4 修改会员等级
 
 ```
 PUT /admin/quota/user/member
 ```
+
+| 参数             | 类型     | 必填 | 说明                           |
+|----------------|--------|:--:|------------------------------|
+| userId         | long   | 是  | 用户 ID                        |
+| memberLevel    | int    | 是  | 会员等级 0-免费 1-月卡 2-季卡 3-年卡     |
+| memberExpireAt | string | 是  | 会员到期时间 `yyyy-MM-ddTHH:mm:ss` |
 
 ```json
 {
@@ -934,7 +975,7 @@ PUT /admin/quota/user/member
 }
 ```
 
-### 11.6 额度流水查询
+### 11.5 额度流水查询
 
 ```
 GET /admin/quota/log/list?page=1&size=10&userId=1&changeType=1&startTime=2026-01-01T00:00:00&endTime=2026-12-31T23:59:59
@@ -1049,40 +1090,187 @@ GET /admin/dashboard/stats
 ### 13.2 操作日志
 
 ```
-GET /admin/operation-log/list?page=1&size=10&adminId=1&action=update_status&targetType=user&startTime=2026-01-01T00:00:00
+GET /admin/operation-log/list?page=1&size=10&adminId=1&action=UPDATE&targetType=user&startTime=2026-01-01T00:00:00
 ```
 
 | 参数         | 类型     | 必填 | 说明                         |
 |------------|--------|:--:|----------------------------|
+| page       | int    | 否  | 页码，默认 1                    |
+| size       | int    | 否  | 每页条数，默认 10                 |
 | adminId    | long   | 否  | 操作管理员 ID                   |
-| action     | string | 否  | 操作类型                       |
-| targetType | string | 否  | 目标类型（user、quota、api_key 等） |
-| startTime  | string | 否  | 开始时间                       |
+| action     | string | 否  | 操作类型（见下表）                  |
+| targetType | string | 否  | 目标类型（见下表）                  |
+| startTime  | string | 否  | 开始时间 `yyyy-MM-ddTHH:mm:ss` |
 | endTime    | string | 否  | 结束时间                       |
+
+| action   | 说明 |
+|----------|----|
+| `LOGIN`  | 登录 |
+| `CREATE` | 创建 |
+| `UPDATE` | 更新 |
+| `DELETE` | 删除 |
+| `RETRY`  | 重试 |
+
+| targetType     | 说明    |
+|----------------|-------|
+| `admin`        | 管理员登录 |
+| `user`         | 用户    |
+| `api_key`      | API密钥 |
+| `announcement` | 公告    |
+| `quota_config` | 额度配置  |
+| `user_quota`   | 用户额度  |
+| `file`         | 文件    |
+| `project`      | 项目    |
+| `task`         | 任务    |
+
+响应 `BaseResponse<Page<OperationLogVO>>`：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "current": 1,
+    "size": 10,
+    "total": 50,
+    "records": [
+      {
+        "id": "100",
+        "adminId": "1",
+        "adminName": "admin",
+        "action": "UPDATE",
+        "targetType": "user",
+        "targetId": "5",
+        "detail": "封禁用户",
+        "createTime": "2026-05-27T15:30:00"
+      }
+    ]
+  }
+}
+```
 
 ### 13.3 项目管理
 
+#### 项目列表
+
 ```
-GET  /admin/project/list?page=1&size=10&name=课件&userId=1&status=1
-GET  /admin/project/{id}
+GET /admin/project/list?page=1&size=10&name=课件&userId=1&status=1
+```
+
+| 参数     | 类型     | 必填 | 说明         |
+|--------|--------|:--:|------------|
+| page   | int    | 否  | 页码，默认 1    |
+| size   | int    | 否  | 每页条数，默认 10 |
+| name   | string | 否  | 项目名称模糊搜索   |
+| userId | long   | 否  | 按创建者筛选     |
+| status | int    | 否  | 项目状态筛选     |
+
+响应 `BaseResponse<Page<Project>>`
+
+#### 项目详情
+
+```
+GET /admin/project/{id}
+```
+
+响应 `BaseResponse<Project>`
+
+#### 删除项目
+
+```
 DELETE /admin/project/{id}
 ```
 
+> 级联将项目下文件移入回收站
+
 ### 13.4 文件管理
 
+#### 文件列表
+
 ```
-GET     /admin/file/list?page=1&size=10&userId=1&projectId=5&fileName=报告&fileType=1
-DELETE  /admin/file/{id}
+GET /admin/file/list?page=1&size=10&userId=1&projectId=5&fileName=报告&fileType=1
 ```
+
+| 参数        | 类型     | 必填 | 说明                        |
+|-----------|--------|:--:|---------------------------|
+| page      | int    | 否  | 页码，默认 1                   |
+| size      | int    | 否  | 每页条数，默认 10                |
+| userId    | long   | 否  | 按用户 ID 筛选                 |
+| projectId | long   | 否  | 按项目 ID 筛选                 |
+| fileName  | string | 否  | 文件名模糊搜索                   |
+| fileType  | int    | 否  | 文件类型 1-PPT 2-Word 3-PDF 等 |
+
+响应 `BaseResponse<Page<FileRecord>>`
+
+#### 删除文件
+
+```
+DELETE /admin/file/{id}
+```
+
+> 同时删除 OSS 中的物理文件
 
 ### 13.5 任务管理
 
+#### 13.5.1 任务列表
+
 ```
-GET  /admin/task/list
-POST /admin/task/{taskId}/retry
+GET /admin/task/list
 ```
 
-任务列表从 Redis SCAN 获取；retry 读取原任务消息重新投递到 RabbitMQ。
+遍历 Redis 中所有 `task:*:status` 键，按状态返回对应的字段，结果按任务 ID 降序排列。
+
+响应 `BaseResponse<List<AdminTaskVO>>`：
+
+```json
+{
+  "code": 0,
+  "data": [
+    {
+      "taskId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "status": "completed",
+      "fileId": "128",
+      "fileUrl": "https://storage.example.com/files/128.pptx",
+      "fileName": "Java基础语法教学.pptx",
+      "qaLowestScore": 72,
+      "qaTotalCount": 15
+    },
+    {
+      "taskId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "status": "failed",
+      "errorCode": 5002,
+      "errorMessage": "大纲验证失败：缺少主标题字段"
+    },
+    {
+      "taskId": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "status": "processing",
+      "stage": "running_qa",
+      "progress": 65,
+      "message": "正在质量评审：第 10/15 页"
+    },
+    {
+      "taskId": "d4e5f6a7-b8c9-0123-defa-234567890123",
+      "status": "pending"
+    }
+  ]
+}
+```
+
+> 字段按 status 不同返回不同内容，使用 `@JsonInclude(NON_NULL)` 省略 null 字段。
+>
+> - `pending` — 仅 taskId、status
+> - `processing` — 额外返回 stage、progress、message
+> - `completed` — 额外返回 fileId、fileUrl、fileName、qaLowestScore、qaTotalCount
+> - `failed` — 额外返回 errorCode、errorMessage
+
+#### 13.5.2 任务详情
+
+```
+GET /admin/task/{taskId}
+```
+
+返回指定任务的完整信息，格式同列表中的单条记录。若任务不存在或已过期返回 404。
+
+响应示例：同 13.5.1 中对应状态的单条记录。
 
 ---
 
@@ -1096,11 +1284,43 @@ POST /admin/task/{taskId}/retry
 GET /admin/announcement/list?page=1&size=10&status=1
 ```
 
+| 参数     | 类型  | 必填 | 说明                  |
+|--------|-----|:--:|---------------------|
+| page   | int | 否  | 页码，默认 1             |
+| size   | int | 否  | 每页条数，默认 10          |
+| status | int | 否  | 发布状态 0-草稿 1-已发布（可选） |
+
+响应 `BaseResponse<Page<AnnouncementVO>>`：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "current": 1,
+    "size": 10,
+    "total": 5,
+    "records": [
+      {
+        "id": "1",
+        "title": "系统维护通知",
+        "content": "本系统将于 2026-06-01 00:00-02:00 进行维护...",
+        "status": 1,
+        "publishTime": "2026-05-27T10:00:00",
+        "createTime": "2026-05-27T09:30:00",
+        "updateTime": "2026-05-27T10:00:00"
+      }
+    ]
+  }
+}
+```
+
 ### 14.2 公告详情
 
 ```
 GET /admin/announcement/{id}
 ```
+
+响应 `BaseResponse<AnnouncementVO>`，格式同列表中的单条记录。
 
 ### 14.3 新增公告
 
@@ -1108,22 +1328,45 @@ GET /admin/announcement/{id}
 POST /admin/announcement
 ```
 
+| 参数      | 类型     | 必填 | 说明            |
+|---------|--------|:--:|---------------|
+| title   | string | 是  | 公告标题          |
+| content | string | 是  | 公告正文内容        |
+| status  | int    | 否  | 发布状态，默认 0（草稿） |
+
 ```json
 {
   "title": "系统维护通知",
   "content": "本系统将于 2026-06-01 00:00-02:00 进行维护...",
-  "status": 1,
-  "publishTime": "2026-05-27T10:00:00"
+  "status": 1
 }
 ```
 
-`status`: 0-草稿，1-已发布。
+> **发布时间说明**：创建公告时 `publishTime` 默认为 null，前端无需传入。当公告状态首次从草稿变为"已发布"时，后端自动将
+`publishTime` 设为当前时间。已发布公告再次编辑不会重置发布时间。
 
 ### 14.4 修改公告
 
 ```
 PUT /admin/announcement
 ```
+
+| 参数      | 类型     | 必填 | 说明              |
+|---------|--------|:--:|-----------------|
+| id      | long   | 是  | 公告 ID           |
+| title   | string | 否  | 公告标题            |
+| content | string | 否  | 公告正文内容          |
+| status  | int    | 否  | 发布状态 0-草稿 1-已发布 |
+
+```json
+{
+  "id": 1,
+  "title": "系统维护通知（更新）",
+  "status": 1
+}
+```
+
+> 当 status 从 0（草稿）变为 1（已发布）时，自动设置 `publishTime = 当前时间`。仅更新标题/内容而不改 status 时，发布时间不变。
 
 ### 14.5 删除公告
 

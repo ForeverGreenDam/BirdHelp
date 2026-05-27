@@ -2,8 +2,10 @@ package com.greendam.birdhelp.controller.admin;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.greendam.birdhelp.common.BaseResponse;
+import com.greendam.birdhelp.common.context.BaseContext;
 import com.greendam.birdhelp.model.entity.FileRecord;
 import com.greendam.birdhelp.service.FileService;
+import com.greendam.birdhelp.service.admin.OperationLogService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
@@ -29,6 +31,9 @@ public class AdminFileController {
 
     @Resource
     private FileService fileService;
+
+    @Resource
+    private OperationLogService operationLogService;
 
     /**
      * <p>分页查询文件记录列表。</p>
@@ -65,6 +70,8 @@ public class AdminFileController {
     @DeleteMapping("/{id}")
     public BaseResponse<Void> delete(@PathVariable Long id) {
         fileService.adminDeleteFile(id);
+        operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
+                "DELETE", "file", id.toString(), "删除文件");
         return BaseResponse.success();
     }
 }

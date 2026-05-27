@@ -42,7 +42,7 @@ com.greendam.birdhelp
 │   │   ├── AdminDashboardController  (stats)
 │   │   ├── AdminProjectController    (project oversight)
 │   │   ├── AdminFileController       (file oversight)
-│   │   ├── AdminTaskController       (task list + retry)
+│   │   ├── AdminTaskController       (task list + detail)
 │   │   └── AdminAnnouncementController (announcement CRUD)
 │   ├── PptController
 │   ├── WordController

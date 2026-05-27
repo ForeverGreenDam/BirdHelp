@@ -2,10 +2,12 @@ package com.greendam.birdhelp.controller.admin;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.greendam.birdhelp.common.BaseResponse;
+import com.greendam.birdhelp.common.context.BaseContext;
 import com.greendam.birdhelp.model.dto.admin.ApiKeyCreateDTO;
 import com.greendam.birdhelp.model.dto.admin.ApiKeyUpdateDTO;
 import com.greendam.birdhelp.model.vo.admin.ApiKeyVO;
 import com.greendam.birdhelp.service.admin.ApiKeyService;
+import com.greendam.birdhelp.service.admin.OperationLogService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
@@ -34,6 +36,9 @@ public class AdminApiKeyController {
 
     @Resource
     private ApiKeyService apiKeyService;
+
+    @Resource
+    private OperationLogService operationLogService;
 
     /**
      * <p>分页查询 API 密钥列表。</p>
@@ -69,6 +74,8 @@ public class AdminApiKeyController {
     @PostMapping
     public BaseResponse<Void> create(@Valid @RequestBody ApiKeyCreateDTO dto) {
         apiKeyService.createApiKey(dto);
+        operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
+                "CREATE", "api_key", dto.getProviderName(), "创建API密钥");
         return BaseResponse.success();
     }
 
@@ -81,6 +88,8 @@ public class AdminApiKeyController {
     @PutMapping
     public BaseResponse<Void> update(@Valid @RequestBody ApiKeyUpdateDTO dto) {
         apiKeyService.updateApiKey(dto);
+        operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
+                "UPDATE", "api_key", dto.getId().toString(), "更新API密钥");
         return BaseResponse.success();
     }
 
@@ -93,6 +102,8 @@ public class AdminApiKeyController {
     @DeleteMapping("/{id}")
     public BaseResponse<Void> delete(@PathVariable Long id) {
         apiKeyService.deleteApiKey(id);
+        operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
+                "DELETE", "api_key", id.toString(), "删除API密钥");
         return BaseResponse.success();
     }
 
@@ -106,6 +117,8 @@ public class AdminApiKeyController {
     @PutMapping("/{id}/enabled")
     public BaseResponse<Void> toggleEnabled(@PathVariable Long id, @RequestParam Boolean enabled) {
         apiKeyService.toggleEnabled(id, enabled);
+        operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
+                "UPDATE", "api_key", id.toString(), enabled ? "启用API密钥" : "禁用API密钥");
         return BaseResponse.success();
     }
 }

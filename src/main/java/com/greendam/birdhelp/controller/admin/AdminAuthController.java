@@ -4,6 +4,7 @@ import com.greendam.birdhelp.common.BaseResponse;
 import com.greendam.birdhelp.model.dto.admin.AdminLoginDTO;
 import com.greendam.birdhelp.model.vo.LoginVO;
 import com.greendam.birdhelp.service.SysUserService;
+import com.greendam.birdhelp.service.admin.OperationLogService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -35,6 +36,9 @@ public class AdminAuthController {
     @Resource
     private SysUserService sysUserService;
 
+    @Resource
+    private OperationLogService operationLogService;
+
     /**
      * <p>管理员登录。</p>
      *
@@ -53,6 +57,8 @@ public class AdminAuthController {
     @PostMapping("/login")
     public BaseResponse<LoginVO> login(@Valid @RequestBody AdminLoginDTO dto) {
         LoginVO result = sysUserService.adminLogin(dto);
+        operationLogService.record(result.getUserInfo().getId(), result.getUserInfo().getUsername(),
+                "LOGIN", "admin", "", "管理员登录");
         return BaseResponse.success(result);
     }
 }

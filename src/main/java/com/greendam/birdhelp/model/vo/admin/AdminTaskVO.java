@@ -1,50 +1,45 @@
 package com.greendam.birdhelp.model.vo.admin;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
 
 /**
  * <p>
- * 管理员任务视图对象，用于展示异步文档生成任务的执行状态。
+ * 管理员任务视图对象，展示异步文档生成任务的状态及结果。
  * </p>
  *
- * <h3>字段说明</h3>
+ * <h3>按状态返回不同字段</h3>
  * <ul>
- *   <li>{@code taskId} - 异步任务 ID</li>
- *   <li>{@code status} - 任务状态，例如 {@code "PENDING"}、{@code "RUNNING"}、{@code "SUCCESS"}、{@code "FAILED"}</li>
- *   <li>{@code docType} - 文档类型，例如 {@code "word"}、{@code "pdf"}、{@code "ppt"}</li>
- *   <li>{@code userId} - 发起任务的用户 ID</li>
- *   <li>{@code callbackId} - 回调标识 ID</li>
- *   <li>{@code errorMessage} - 任务失败时的错误信息</li>
+ *   <li>{@code pending} — 仅返回 {@code taskId} 和 {@code status}</li>
+ *   <li>{@code processing} — 额外返回 {@code stage}、{@code progress}、{@code message}</li>
+ *   <li>{@code completed} — 额外返回 {@code fileId}、{@code fileName}、{@code fileUrl}、{@code qaLowestScore}、{@code qaTotalCount}</li>
+ *   <li>{@code failed} — 额外返回 {@code errorCode}、{@code errorMessage}</li>
  * </ul>
  *
  * @author ForeverGreenDam
  */
 @Data
 @Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class AdminTaskVO {
-    /**
-     * 异步任务 ID。
-     */
+
     private String taskId;
-    /**
-     * 任务状态，例如 {@code "PENDING"}、{@code "RUNNING"}、{@code "SUCCESS"}、{@code "FAILED"}。
-     */
     private String status;
-    /**
-     * 文档类型，例如 {@code "word"}、{@code "pdf"}、{@code "ppt"}。
-     */
-    private String docType;
-    /**
-     * 发起任务的用户 ID。
-     */
-    private String userId;
-    /**
-     * 回调标识 ID。
-     */
-    private String callbackId;
-    /**
-     * 任务失败时的错误信息。
-     */
+
+    // ---- processing ----
+    private String stage;
+    private Integer progress;
+    private String message;
+
+    // ---- completed ----
+    private Long fileId;
+    private String fileUrl;
+    private String fileName;
+    private Integer qaLowestScore;
+    private Integer qaTotalCount;
+
+    // ---- failed ----
+    private Integer errorCode;
     private String errorMessage;
 }

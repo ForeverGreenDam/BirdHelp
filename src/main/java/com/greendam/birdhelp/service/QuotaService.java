@@ -3,7 +3,6 @@ package com.greendam.birdhelp.service;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.greendam.birdhelp.model.dto.admin.QuotaConfigUpdateDTO;
-import com.greendam.birdhelp.model.dto.admin.UserQuotaAdjustDTO;
 import com.greendam.birdhelp.model.dto.admin.UserQuotaMemberUpdateDTO;
 import com.greendam.birdhelp.model.entity.QuotaConfig;
 import com.greendam.birdhelp.model.entity.UserQuota;
@@ -69,8 +68,6 @@ public interface QuotaService extends IService<UserQuota> {
     void adminUpdateConfig(QuotaConfigUpdateDTO dto);
 
     Page<AdminUserQuotaVO> adminListUserQuotas(int page, int size, Long userId, Integer memberLevel);
-
-    void adminAdjustQuota(UserQuotaAdjustDTO dto);
 
     void adminChangeMemberLevel(UserQuotaMemberUpdateDTO dto);
 

@@ -7,4 +7,5 @@ package com.greendam.birdhelp.constant;
 public interface JwtClaimsConstant {
     String USER_ID = "id";
     String USER_TYPE = "userType";
+    String USER_NAME = "username";
 }

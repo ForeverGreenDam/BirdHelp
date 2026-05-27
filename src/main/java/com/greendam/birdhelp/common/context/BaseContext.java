@@ -6,7 +6,8 @@ package com.greendam.birdhelp.common.context;
  */
 public class BaseContext {
 
-    public static ThreadLocal<Long> threadLocal = new ThreadLocal<>();
+    private static final ThreadLocal<Long> threadLocal = new ThreadLocal<>();
+    private static final ThreadLocal<String> nameThreadLocal = new ThreadLocal<>();
 
     public static void setCurrentId(Long id) {
         threadLocal.set(id);
@@ -16,8 +17,17 @@ public class BaseContext {
         return threadLocal.get();
     }
 
+    public static String getCurrentName() {
+        return nameThreadLocal.get();
+    }
+
+    public static void setCurrentName(String name) {
+        nameThreadLocal.set(name);
+    }
+
     public static void removeCurrentId() {
         threadLocal.remove();
+        nameThreadLocal.remove();
     }
 
 }

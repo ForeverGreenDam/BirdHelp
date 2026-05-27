@@ -2,10 +2,12 @@ package com.greendam.birdhelp.controller.admin;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.greendam.birdhelp.common.BaseResponse;
+import com.greendam.birdhelp.common.context.BaseContext;
 import com.greendam.birdhelp.model.dto.admin.AnnouncementCreateDTO;
 import com.greendam.birdhelp.model.dto.admin.AnnouncementUpdateDTO;
 import com.greendam.birdhelp.model.vo.admin.AnnouncementVO;
 import com.greendam.birdhelp.service.admin.AnnouncementService;
+import com.greendam.birdhelp.service.admin.OperationLogService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
@@ -33,6 +35,9 @@ public class AdminAnnouncementController {
 
     @Resource
     private AnnouncementService announcementService;
+
+    @Resource
+    private OperationLogService operationLogService;
 
     /**
      * <p>分页查询公告列表。</p>
@@ -70,6 +75,8 @@ public class AdminAnnouncementController {
     @PostMapping
     public BaseResponse<Void> create(@Valid @RequestBody AnnouncementCreateDTO dto) {
         announcementService.adminCreateAnnouncement(dto);
+        operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
+                "CREATE", "announcement", "", "创建公告: " + dto.getTitle());
         return BaseResponse.success();
     }
 
@@ -82,6 +89,8 @@ public class AdminAnnouncementController {
     @PutMapping
     public BaseResponse<Void> update(@Valid @RequestBody AnnouncementUpdateDTO dto) {
         announcementService.adminUpdateAnnouncement(dto);
+        operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
+                "UPDATE", "announcement", dto.getId().toString(), "更新公告");
         return BaseResponse.success();
     }
 
@@ -94,6 +103,8 @@ public class AdminAnnouncementController {
     @DeleteMapping("/{id}")
     public BaseResponse<Void> delete(@PathVariable Long id) {
         announcementService.adminDeleteAnnouncement(id);
+        operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
+                "DELETE", "announcement", id.toString(), "删除公告");
         return BaseResponse.success();
     }
 }

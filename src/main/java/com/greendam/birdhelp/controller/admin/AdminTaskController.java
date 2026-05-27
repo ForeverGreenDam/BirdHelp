@@ -1,17 +1,13 @@
 package com.greendam.birdhelp.controller.admin;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.greendam.birdhelp.common.BaseResponse;
-import com.greendam.birdhelp.model.dto.DocGenerationMessage;
 import com.greendam.birdhelp.model.vo.admin.AdminTaskVO;
-import com.greendam.birdhelp.properties.RabbitMQProperties;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.core.MessageDeliveryMode;
-import org.springframework.amqp.core.MessageProperties;
-import org.springframework.amqp.rabbit.connection.CorrelationData;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
@@ -20,13 +16,13 @@ import java.util.Set;
 
 /**
  * <p>
- * 管理员文档生成任务接口控制器，提供后台任务列表查询和失败任务重试功能。
+ * 管理员文档生成任务接口控制器，提供任务列表查询和任务详情功能。
  * </p>
  *
  * <h3>功能说明</h3>
  * <ul>
  *   <li>任务列表：从 Redis 中查询所有文档生成任务及其状态</li>
- *   <li>任务重试：重新发送失败的文档生成任务到 RabbitMQ 消息队列</li>
+ *   <li>任务详情：查看指定任务的完整信息</li>
  * </ul>
  *
  * @author ForeverGreenDam
@@ -36,22 +32,15 @@ import java.util.Set;
 @RequestMapping("/admin/task")
 public class AdminTaskController {
 
+    private static final String TASK_PREFIX = "task:";
+
     @Resource
     private StringRedisTemplate stringRedisTemplate;
-
-    @Resource
-    private RabbitTemplate rabbitTemplate;
-
-    @Resource
-    private RabbitMQProperties mqProperties;
-
-    @Resource
-    private ObjectMapper objectMapper;
 
     /**
      * <p>查询所有文档生成任务列表。</p>
      *
-     * <p>遍历 Redis 中 {@code task:*} 前缀的键，组装每个任务的状态、用户 ID、文档类型、回调 ID 和错误信息。
+     * <p>遍历 Redis 中 {@code task:*:status} 前缀的键，按状态组装每个任务的对应字段。
      * 结果按任务 ID 降序排列。</p>
      *
      * @return 文档生成任务视图对象列表
@@ -59,24 +48,11 @@ public class AdminTaskController {
     @GetMapping("/list")
     public BaseResponse<List<AdminTaskVO>> list() {
         List<AdminTaskVO> tasks = new ArrayList<>();
-        Set<String> keys = stringRedisTemplate.keys("task:*:status");
+        Set<String> keys = stringRedisTemplate.keys(TASK_PREFIX + "*:status");
         if (keys != null) {
             for (String key : keys) {
-                String taskId = key.replace("task:", "").replace(":status", "");
-                String status = stringRedisTemplate.opsForValue().get(key);
-                String userId = stringRedisTemplate.opsForValue().get("task:" + taskId + ":userId");
-                String docType = stringRedisTemplate.opsForValue().get("task:" + taskId + ":docType");
-                String callbackId = stringRedisTemplate.opsForValue().get("task:" + taskId + ":callbackId");
-                String errorMessage = stringRedisTemplate.opsForValue().get("task:" + taskId + ":error");
-
-                tasks.add(AdminTaskVO.builder()
-                        .taskId(taskId)
-                        .status(status)
-                        .userId(userId)
-                        .docType(docType)
-                        .callbackId(callbackId)
-                        .errorMessage(errorMessage)
-                        .build());
+                String taskId = key.replace(TASK_PREFIX, "").replace(":status", "");
+                tasks.add(buildTaskVO(taskId));
             }
         }
         tasks.sort((a, b) -> b.getTaskId().compareTo(a.getTaskId()));
@@ -84,50 +60,83 @@ public class AdminTaskController {
     }
 
     /**
-     * <p>重试指定的失败文档生成任务。</p>
+     * <p>查询指定任务的详细信息。</p>
      *
-     * <p>从 Redis 中读取原始任务的消息内容和路由键，重新生成新的任务 ID 并发送至 RabbitMQ 消息队列。
-     * 原任务记录不会被删除。</p>
-     *
-     * @param taskId 待重试的原始任务 ID
-     * @return 操作成功无数据返回；若原始消息已过期则返回 404 错误
+     * @param taskId 任务 ID
+     * @return 任务详情视图对象
      */
-    @PostMapping("/{taskId}/retry")
-    public BaseResponse<Void> retry(@PathVariable String taskId) {
-        String messageJson = stringRedisTemplate.opsForValue().get("task:" + taskId + ":message");
-        if (messageJson == null) {
-            return BaseResponse.error(40400, "任务消息已过期或不存在");
+    @GetMapping("/{taskId}")
+    public BaseResponse<AdminTaskVO> detail(@PathVariable String taskId) {
+        AdminTaskVO vo = buildTaskVO(taskId);
+        if (vo.getStatus() == null) {
+            return BaseResponse.error(40400, "任务不存在或已过期");
         }
-        String routingKey = stringRedisTemplate.opsForValue().get("task:" + taskId + ":routingKey");
+        return BaseResponse.success(vo);
+    }
+
+    /**
+     * <p>根据任务 ID 从 Redis 组装完整的任务视图对象。</p>
+     */
+    private AdminTaskVO buildTaskVO(String taskId) {
+        String key = TASK_PREFIX + taskId;
+        String status = stringRedisTemplate.opsForValue().get(key + ":status");
+
+        if ("completed".equals(status)) {
+            return AdminTaskVO.builder()
+                    .taskId(taskId)
+                    .status("completed")
+                    .fileId(getLong(key + ":fileId"))
+                    .fileUrl(stringRedisTemplate.opsForValue().get(key + ":fileUrl"))
+                    .fileName(stringRedisTemplate.opsForValue().get(key + ":fileName"))
+                    .qaLowestScore(getInt(key + ":qaLowestScore"))
+                    .qaTotalCount(getInt(key + ":qaTotalCount"))
+                    .build();
+        }
+
+        if ("failed".equals(status)) {
+            return AdminTaskVO.builder()
+                    .taskId(taskId)
+                    .status("failed")
+                    .errorCode(getInt(key + ":errorCode"))
+                    .errorMessage(stringRedisTemplate.opsForValue().get(key + ":errorMessage"))
+                    .build();
+        }
+
+        String stage = stringRedisTemplate.opsForValue().get(key + ":stage");
+        String progress = stringRedisTemplate.opsForValue().get(key + ":progress");
+        if (stage != null || progress != null) {
+            return AdminTaskVO.builder()
+                    .taskId(taskId)
+                    .status("processing")
+                    .stage(stage)
+                    .progress(progress != null ? Integer.parseInt(progress) : null)
+                    .message(stringRedisTemplate.opsForValue().get(key + ":message"))
+                    .build();
+        }
+
+        return AdminTaskVO.builder()
+                .taskId(taskId)
+                .status("pending")
+                .build();
+    }
+
+    private Long getLong(String key) {
+        String val = stringRedisTemplate.opsForValue().get(key);
+        if (val == null || val.isEmpty()) return null;
         try {
-            DocGenerationMessage msg = objectMapper.readValue(messageJson, DocGenerationMessage.class);
-            if (routingKey == null) {
-                routingKey = "doc.generate." + msg.getDocType();
-            }
+            return Long.parseLong(val);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
 
-            String newTaskId = java.util.UUID.randomUUID().toString();
-            msg.setTaskId(newTaskId);
-            msg.setTimestamp(System.currentTimeMillis());
-
-            String messageKey = "task:" + newTaskId + ":message";
-            String routingKeyKey = "task:" + newTaskId + ":routingKey";
-            stringRedisTemplate.opsForValue().set(messageKey, objectMapper.writeValueAsString(msg), java.time.Duration.ofHours(24));
-            stringRedisTemplate.opsForValue().set(routingKeyKey, routingKey, java.time.Duration.ofHours(24));
-
-            CorrelationData correlationData = new CorrelationData(newTaskId);
-            rabbitTemplate.convertAndSend(mqProperties.getExchange(), routingKey, msg,
-                    m -> {
-                        m.getMessageProperties().setContentType(MessageProperties.CONTENT_TYPE_JSON);
-                        m.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);
-                        m.getMessageProperties().setMessageId(newTaskId);
-                        return m;
-                    }, correlationData);
-
-            log.info("管理员重试任务: oldTaskId={}, newTaskId={}, routingKey={}", taskId, newTaskId, routingKey);
-            return BaseResponse.success();
-        } catch (Exception e) {
-            log.error("重试任务失败: taskId={}", taskId, e);
-            return BaseResponse.error(50001, "重试失败: " + e.getMessage());
+    private Integer getInt(String key) {
+        String val = stringRedisTemplate.opsForValue().get(key);
+        if (val == null || val.isEmpty()) return null;
+        try {
+            return Integer.parseInt(val);
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
 }

@@ -2,13 +2,14 @@ package com.greendam.birdhelp.controller.admin;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.greendam.birdhelp.common.BaseResponse;
+import com.greendam.birdhelp.common.context.BaseContext;
 import com.greendam.birdhelp.model.dto.admin.QuotaConfigUpdateDTO;
-import com.greendam.birdhelp.model.dto.admin.UserQuotaAdjustDTO;
 import com.greendam.birdhelp.model.dto.admin.UserQuotaMemberUpdateDTO;
 import com.greendam.birdhelp.model.entity.QuotaConfig;
 import com.greendam.birdhelp.model.vo.admin.AdminQuotaLogVO;
 import com.greendam.birdhelp.model.vo.admin.AdminUserQuotaVO;
 import com.greendam.birdhelp.service.QuotaService;
+import com.greendam.birdhelp.service.admin.OperationLogService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
@@ -40,6 +41,9 @@ public class AdminQuotaController {
     @Resource
     private QuotaService quotaService;
 
+    @Resource
+    private OperationLogService operationLogService;
+
     /**
      * <p>查询所有额度配置项列表。</p>
      *
@@ -59,6 +63,8 @@ public class AdminQuotaController {
     @PutMapping("/config")
     public BaseResponse<Void> updateConfig(@Valid @RequestBody QuotaConfigUpdateDTO dto) {
         quotaService.adminUpdateConfig(dto);
+        operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
+                "UPDATE", "quota_config", dto.getId().toString(), "更新额度配置");
         return BaseResponse.success();
     }
 
@@ -83,18 +89,6 @@ public class AdminQuotaController {
     }
 
     /**
-     * <p>手动调整指定用户的额度。</p>
-     *
-     * @param dto 包含用户 ID、调整额度数量及调整原因的请求体
-     * @return 操作成功无数据返回
-     */
-    @PutMapping("/user/adjust")
-    public BaseResponse<Void> adjustQuota(@Valid @RequestBody UserQuotaAdjustDTO dto) {
-        quotaService.adminAdjustQuota(dto);
-        return BaseResponse.success();
-    }
-
-    /**
      * <p>变更指定用户的会员等级。</p>
      *
      * <p>会员等级变更后，该用户的可用额度将根据新等级对应的配置重新计算。</p>
@@ -105,6 +99,8 @@ public class AdminQuotaController {
     @PutMapping("/user/member")
     public BaseResponse<Void> changeMemberLevel(@Valid @RequestBody UserQuotaMemberUpdateDTO dto) {
         quotaService.adminChangeMemberLevel(dto);
+        operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
+                "UPDATE", "user_quota", dto.getUserId().toString(), "变更会员等级");
         return BaseResponse.success();
     }
 

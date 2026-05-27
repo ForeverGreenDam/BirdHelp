@@ -10,7 +10,6 @@ import com.greendam.birdhelp.mapper.QuotaLogMapper;
 import com.greendam.birdhelp.mapper.SysUserMapper;
 import com.greendam.birdhelp.mapper.UserQuotaMapper;
 import com.greendam.birdhelp.model.dto.admin.QuotaConfigUpdateDTO;
-import com.greendam.birdhelp.model.dto.admin.UserQuotaAdjustDTO;
 import com.greendam.birdhelp.model.dto.admin.UserQuotaMemberUpdateDTO;
 import com.greendam.birdhelp.model.entity.QuotaConfig;
 import com.greendam.birdhelp.model.entity.QuotaLog;
@@ -201,18 +200,6 @@ public class QuotaServiceImpl extends ServiceImpl<UserQuotaMapper, UserQuota>
                     .build();
         }).collect(Collectors.toList()));
         return voPage;
-    }
-
-    @Override
-    public void adminAdjustQuota(UserQuotaAdjustDTO dto) {
-        UserQuota quota = getOrCreateUserQuota(dto.getUserId());
-        int newVal = quota.getDailyUsed() + dto.getChangeAmount();
-        if (newVal < 0) newVal = 0;
-        quota.setDailyUsed(newVal);
-        quota.setDailyDate(LocalDate.now());
-        updateById(quota);
-        insertLog(dto.getUserId(), dto.getChangeAmount() > 0 ? 1 : 2, "admin_manual");
-        log.info("管理员手动调整额度: userId={}, change={}, newDailyUsed={}", dto.getUserId(), dto.getChangeAmount(), newVal);
     }
 
     @Override

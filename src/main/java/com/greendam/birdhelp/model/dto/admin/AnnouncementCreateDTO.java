@@ -3,7 +3,6 @@ package com.greendam.birdhelp.model.dto.admin;
 import lombok.Data;
 
 import javax.validation.constraints.NotBlank;
-import java.time.LocalDateTime;
 
 /**
  * <p>
@@ -15,7 +14,6 @@ import java.time.LocalDateTime;
  *   <li>{@code title} - 公告标题，不能为空</li>
  *   <li>{@code content} - 公告正文内容，不能为空</li>
  *   <li>{@code status} - 发布状态：{@code 0} - 草稿，{@code 1} - 已发布</li>
- *   <li>{@code publishTime} - 发布时间</li>
  * </ul>
  *
  * @author ForeverGreenDam
@@ -38,9 +36,4 @@ public class AnnouncementCreateDTO {
      * 发布状态：{@code 0} - 草稿，{@code 1} - 已发布。
      */
     private Integer status;
-
-    /**
-     * 发布时间。
-     */
-    private LocalDateTime publishTime;
 }

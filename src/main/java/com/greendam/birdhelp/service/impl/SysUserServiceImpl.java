@@ -325,6 +325,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
         Map<String, Object> claims = new HashMap<>();
         claims.put(JwtClaimsConstant.USER_ID, user.getId());
         claims.put(JwtClaimsConstant.USER_TYPE, user.getUserType());
+        claims.put(JwtClaimsConstant.USER_NAME, user.getUsername());
         String token = JwtUtil.createJWT(jwtProperties.getAdminSecretKey(), jwtProperties.getAdminTtl(), claims);
 
         return LoginVO.builder()
@@ -341,8 +342,8 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
                 .like(phone != null, SysUser::getPhone, phone)
                 .like(email != null, SysUser::getEmail, email)
                 .eq(status != null, SysUser::getStatus, status)
-                .ge(startDate != null, SysUser::getCreateTime, startDate.atStartOfDay())
-                .le(endDate != null, SysUser::getCreateTime, endDate.plusDays(1).atStartOfDay())
+                .ge(startDate != null, SysUser::getCreateTime, startDate != null ? startDate.atStartOfDay() : null)
+                .le(endDate != null, SysUser::getCreateTime, endDate != null ? endDate.plusDays(1).atStartOfDay() : null)
                 .orderByDesc(SysUser::getCreateTime);
 
         Page<SysUser> userPage = page(Page.of(page, size), wrapper);
