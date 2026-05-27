@@ -653,6 +653,14 @@ CREATE TABLE `api_key` (
 
 参数：`providerName`（可选）。`modelType` 已移除，所有存储的密钥均为聊天模型。返回解密后的 apiKey、baseUrl、modelName。
 
+### 10.4 用户端接口
+
+| 方法  | 路径              | 说明                          |
+|-----|-----------------|-----------------------------|
+| GET | /api/model/list | 获取可用的大语言模型列表（需用户 JWT Token） |
+
+不返回 apiKey 和 baseUrl，仅返回 modelName、providerName、description，供前端生成页面渲染模型选择下拉框。
+
 ---
 
 ## 十一、操作日志模块

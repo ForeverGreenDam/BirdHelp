@@ -412,7 +412,41 @@ GET /file/recycle?projectId=1&page=1&size=10
 
 ---
 
-## 五、PPT 生成模块 — `/ppt`
+## 五、模型查询 — `/model`
+
+> 需 Token
+
+### 5.1 获取可用模型列表
+
+```
+GET /model/list
+```
+
+返回已启用的大语言模型列表，不包含 `apiKey` 和 `baseUrl` 等敏感信息，供前端渲染模型选择下拉框。
+
+响应 `BaseResponse<List<Map<String, String>>>`：
+
+```json
+{
+  "code": 0,
+  "data": [
+    {
+      "modelName": "gpt-4o",
+      "providerName": "openai",
+      "description": "OpenAI GPT-4o 生产密钥"
+    },
+    {
+      "modelName": "deepseek-chat",
+      "providerName": "deepseek",
+      "description": ""
+    }
+  ]
+}
+```
+
+---
+
+## 六、PPT 生成模块 — `/ppt`
 
 > 需 Token。**异步接口**，提交任务后立即返回 `taskId`，生成完成后通过回调更新状态。
 >
@@ -567,7 +601,7 @@ GET /task/{taskId}
 
 ---
 
-## 六、Word 生成模块 — `/word`
+## 七、Word 生成模块 — `/word`
 
 > 需 Token。**异步接口**，提交任务后立即返回 `taskId`，生成完成后通过回调更新状态。
 
@@ -632,7 +666,7 @@ POST /word/generate
 
 ---
 
-## 七、PDF 生成模块 — `/pdf`
+## 八、PDF 生成模块 — `/pdf`
 
 > 需 Token。**异步接口**，提交任务后立即返回 `taskId`，生成完成后通过回调更新状态。
 
@@ -695,7 +729,7 @@ POST /pdf/generate
 
 ---
 
-## 八、额度模块 — `/quota`
+## 九、额度模块 — `/quota`
 
 > 需 Token
 
@@ -722,7 +756,7 @@ GET /quota/my
 
 ---
 
-## 九、管理员后台 — 认证
+## 十、管理员后台 — 认证
 
 ### 9.1 管理员登录
 
@@ -746,7 +780,7 @@ POST /admin/login
 
 ---
 
-## 十、管理员后台 — 用户管理
+## 十一、管理员后台 — 用户管理
 
 > 所有接口需 Admin Token
 
@@ -838,7 +872,7 @@ PUT /admin/user/{id}/role?userType=2
 
 ---
 
-## 十一、管理员后台 — 额度管理
+## 十二、管理员后台 — 额度管理
 
 > 所有接口需 Admin Token
 
@@ -915,7 +949,7 @@ GET /admin/quota/log/list?page=1&size=10&userId=1&changeType=1&startTime=2026-01
 
 ---
 
-## 十二、管理员后台 — API Key 管理
+## 十三、管理员后台 — API Key 管理
 
 > 所有接口需 Admin Token
 
@@ -981,7 +1015,7 @@ PUT /admin/api-key/{id}/enabled?enabled=false
 
 ---
 
-## 十三、管理员后台 — 其他
+## 十四、管理员后台 — 其他
 
 > 所有接口需 Admin Token
 
@@ -1052,7 +1086,7 @@ POST /admin/task/{taskId}/retry
 
 ---
 
-## 十四、管理员后台 — 公告管理
+## 十五、管理员后台 — 公告管理
 
 > 需 Admin Token
 
@@ -1099,7 +1133,7 @@ DELETE /admin/announcement/{id}
 
 ---
 
-## 十五、用户端公告查询
+## 十六、用户端公告查询
 
 > 无需登录
 
@@ -1113,7 +1147,7 @@ GET /announcement/active
 
 ---
 
-## 十六、通用错误码
+## 十七、通用错误码
 
 |  code   | 说明             |
 |:-------:|----------------|
@@ -1143,7 +1177,7 @@ GET /announcement/active
 
 ---
 
-## 十七、分页响应格式
+## 十八、分页响应格式
 
 所有列表接口返回统一分页结构：
 
