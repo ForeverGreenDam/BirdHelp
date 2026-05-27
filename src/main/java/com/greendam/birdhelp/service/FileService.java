@@ -109,4 +109,8 @@ public interface FileService extends IService<FileRecord> {
      * @return 清理的文件数量
      */
     int cleanExpiredRecycle();
+
+    Page<FileRecord> adminListFiles(int page, int size, Long userId, Long projectId, String fileName, Integer fileType);
+
+    void adminDeleteFile(Long id);
 }

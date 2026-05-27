@@ -1,15 +1,24 @@
 package com.greendam.birdhelp.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.greendam.birdhelp.exception.BusinessException;
 import com.greendam.birdhelp.exception.ErrorCode;
 import com.greendam.birdhelp.mapper.QuotaConfigMapper;
 import com.greendam.birdhelp.mapper.QuotaLogMapper;
+import com.greendam.birdhelp.mapper.SysUserMapper;
 import com.greendam.birdhelp.mapper.UserQuotaMapper;
+import com.greendam.birdhelp.model.dto.admin.QuotaConfigUpdateDTO;
+import com.greendam.birdhelp.model.dto.admin.UserQuotaAdjustDTO;
+import com.greendam.birdhelp.model.dto.admin.UserQuotaMemberUpdateDTO;
 import com.greendam.birdhelp.model.entity.QuotaConfig;
 import com.greendam.birdhelp.model.entity.QuotaLog;
+import com.greendam.birdhelp.model.entity.SysUser;
 import com.greendam.birdhelp.model.entity.UserQuota;
 import com.greendam.birdhelp.model.vo.QuotaInfoVO;
+import com.greendam.birdhelp.model.vo.admin.AdminQuotaLogVO;
+import com.greendam.birdhelp.model.vo.admin.AdminUserQuotaVO;
 import com.greendam.birdhelp.service.QuotaService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -19,6 +28,9 @@ import javax.annotation.Resource;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * <p>
@@ -51,6 +63,9 @@ public class QuotaServiceImpl extends ServiceImpl<UserQuotaMapper, UserQuota>
 
     @Resource
     private QuotaLogMapper quotaLogMapper;
+
+    @Resource
+    private SysUserMapper sysUserMapper;
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
@@ -137,6 +152,115 @@ public class QuotaServiceImpl extends ServiceImpl<UserQuotaMapper, UserQuota>
         } finally {
             stringRedisTemplate.delete(lockKey);
         }
+    }
+
+    // ==================== 管理员方法 ====================
+
+    @Override
+    public List<QuotaConfig> adminListConfigs() {
+        return quotaConfigMapper.selectList(null);
+    }
+
+    @Override
+    public void adminUpdateConfig(QuotaConfigUpdateDTO dto) {
+        QuotaConfig config = quotaConfigMapper.selectById(dto.getId());
+        if (config == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "额度配置不存在");
+        }
+        config.setDailyLimit(dto.getDailyLimit());
+        quotaConfigMapper.updateById(config);
+        log.info("管理员更新额度配置: level={}, dailyLimit={}", config.getLevel(), dto.getDailyLimit());
+    }
+
+    @Override
+    public Page<AdminUserQuotaVO> adminListUserQuotas(int page, int size, Long userId, Integer memberLevel) {
+        LambdaQueryWrapper<UserQuota> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(userId != null, UserQuota::getUserId, userId)
+                .eq(memberLevel != null, UserQuota::getMemberLevel, memberLevel)
+                .orderByAsc(UserQuota::getUserId);
+
+        Page<UserQuota> quotaPage = page(Page.of(page, size), wrapper);
+
+        Map<Long, SysUser> userMap = loadUserMap(quotaPage.getRecords().stream()
+                .map(UserQuota::getUserId).collect(Collectors.toList()));
+
+        Page<AdminUserQuotaVO> voPage = new Page<>(page, size, quotaPage.getTotal());
+        voPage.setRecords(quotaPage.getRecords().stream().map(q -> {
+            SysUser user = userMap.get(q.getUserId());
+            int effectiveLevel = getEffectiveLevel(q);
+            int dailyLimit = getDailyLimit(effectiveLevel);
+            return AdminUserQuotaVO.builder()
+                    .userId(q.getUserId())
+                    .username(user != null ? user.getUsername() : "")
+                    .nickname(user != null ? user.getNickname() : "")
+                    .memberLevel(q.getMemberLevel())
+                    .memberExpireAt(q.getMemberExpireAt())
+                    .dailyUsed(q.getDailyUsed())
+                    .dailyLimit(dailyLimit)
+                    .dailyDate(q.getDailyDate())
+                    .build();
+        }).collect(Collectors.toList()));
+        return voPage;
+    }
+
+    @Override
+    public void adminAdjustQuota(UserQuotaAdjustDTO dto) {
+        UserQuota quota = getOrCreateUserQuota(dto.getUserId());
+        int newVal = quota.getDailyUsed() + dto.getChangeAmount();
+        if (newVal < 0) newVal = 0;
+        quota.setDailyUsed(newVal);
+        quota.setDailyDate(LocalDate.now());
+        updateById(quota);
+        insertLog(dto.getUserId(), dto.getChangeAmount() > 0 ? 1 : 2, "admin_manual");
+        log.info("管理员手动调整额度: userId={}, change={}, newDailyUsed={}", dto.getUserId(), dto.getChangeAmount(), newVal);
+    }
+
+    @Override
+    public void adminChangeMemberLevel(UserQuotaMemberUpdateDTO dto) {
+        UserQuota quota = getOrCreateUserQuota(dto.getUserId());
+        quota.setMemberLevel(dto.getMemberLevel());
+        quota.setMemberExpireAt(dto.getMemberExpireAt());
+        updateById(quota);
+        log.info("管理员修改会员等级: userId={}, level={}, expireAt={}", dto.getUserId(), dto.getMemberLevel(), dto.getMemberExpireAt());
+    }
+
+    @Override
+    public Page<AdminQuotaLogVO> adminListQuotaLogs(int page, int size, Long userId, Integer changeType,
+                                                    LocalDateTime startTime, LocalDateTime endTime) {
+        LambdaQueryWrapper<QuotaLog> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(userId != null, QuotaLog::getUserId, userId)
+                .eq(changeType != null, QuotaLog::getChangeType, changeType)
+                .ge(startTime != null, QuotaLog::getCreateTime, startTime)
+                .le(endTime != null, QuotaLog::getCreateTime, endTime)
+                .orderByDesc(QuotaLog::getCreateTime);
+
+        Page<QuotaLog> logPage = quotaLogMapper.selectPage(Page.of(page, size), wrapper);
+
+        Map<Long, SysUser> userMap = loadUserMap(logPage.getRecords().stream()
+                .map(QuotaLog::getUserId).collect(Collectors.toList()));
+
+        Page<AdminQuotaLogVO> voPage = new Page<>(page, size, logPage.getTotal());
+        voPage.setRecords(logPage.getRecords().stream().map(l -> {
+            SysUser user = userMap.get(l.getUserId());
+            return AdminQuotaLogVO.builder()
+                    .id(l.getId())
+                    .userId(l.getUserId())
+                    .username(user != null ? user.getUsername() : "")
+                    .changeType(l.getChangeType())
+                    .relatedId(l.getRelatedId())
+                    .createTime(l.getCreateTime())
+                    .build();
+        }).collect(Collectors.toList()));
+        return voPage;
+    }
+
+    /**
+     * 批量加载用户信息映射。
+     */
+    private Map<Long, SysUser> loadUserMap(List<Long> userIds) {
+        if (userIds.isEmpty()) return Map.of();
+        List<SysUser> users = sysUserMapper.selectBatchIds(userIds.stream().distinct().collect(Collectors.toList()));
+        return users.stream().collect(Collectors.toMap(SysUser::getId, u -> u));
     }
 
     // ==================== 内部方法 ====================

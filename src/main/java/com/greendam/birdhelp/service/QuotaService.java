@@ -1,8 +1,18 @@
 package com.greendam.birdhelp.service;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.greendam.birdhelp.model.dto.admin.QuotaConfigUpdateDTO;
+import com.greendam.birdhelp.model.dto.admin.UserQuotaAdjustDTO;
+import com.greendam.birdhelp.model.dto.admin.UserQuotaMemberUpdateDTO;
+import com.greendam.birdhelp.model.entity.QuotaConfig;
 import com.greendam.birdhelp.model.entity.UserQuota;
 import com.greendam.birdhelp.model.vo.QuotaInfoVO;
+import com.greendam.birdhelp.model.vo.admin.AdminQuotaLogVO;
+import com.greendam.birdhelp.model.vo.admin.AdminUserQuotaVO;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * <p>
@@ -53,4 +63,16 @@ public interface QuotaService extends IService<UserQuota> {
      * @param relatedId 关联业务 ID（生成任务 callback_id），可为空
      */
     void refundQuota(Long userId, String relatedId);
+
+    List<QuotaConfig> adminListConfigs();
+
+    void adminUpdateConfig(QuotaConfigUpdateDTO dto);
+
+    Page<AdminUserQuotaVO> adminListUserQuotas(int page, int size, Long userId, Integer memberLevel);
+
+    void adminAdjustQuota(UserQuotaAdjustDTO dto);
+
+    void adminChangeMemberLevel(UserQuotaMemberUpdateDTO dto);
+
+    Page<AdminQuotaLogVO> adminListQuotaLogs(int page, int size, Long userId, Integer changeType, LocalDateTime startTime, LocalDateTime endTime);
 }

@@ -2,6 +2,8 @@ package com.greendam.birdhelp.service.impl;
 
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.crypto.digest.BCrypt;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.greendam.birdhelp.common.utils.AliOssUtil;
 import com.greendam.birdhelp.common.utils.JwtUtil;
@@ -11,9 +13,12 @@ import com.greendam.birdhelp.exception.BusinessException;
 import com.greendam.birdhelp.exception.ErrorCode;
 import com.greendam.birdhelp.mapper.SysUserMapper;
 import com.greendam.birdhelp.model.dto.*;
+import com.greendam.birdhelp.model.dto.admin.AdminLoginDTO;
+import com.greendam.birdhelp.model.dto.admin.AdminUserUpdateDTO;
 import com.greendam.birdhelp.model.entity.SysUser;
 import com.greendam.birdhelp.model.vo.LoginVO;
 import com.greendam.birdhelp.model.vo.UserInfoVO;
+import com.greendam.birdhelp.model.vo.admin.AdminUserVO;
 import com.greendam.birdhelp.properties.JwtProperties;
 import com.greendam.birdhelp.service.SysUserService;
 import lombok.extern.slf4j.Slf4j;
@@ -294,6 +299,117 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
         log.info("重置密码成功: {}", dto.getAccount());
     }
 
+    @Override
+    public LoginVO adminLogin(AdminLoginDTO dto) {
+        SysUser user = lambdaQuery()
+                .eq(SysUser::getPhone, dto.getAccount())
+                .or()
+                .eq(SysUser::getEmail, dto.getAccount())
+                .or()
+                .eq(SysUser::getUsername, dto.getAccount())
+                .one();
+
+        if (user == null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+        if (user.getUserType() == null || user.getUserType() != 2) {
+            throw new BusinessException(ErrorCode.NOT_AUTH_ERROR, "非管理员账号，无法登录后台");
+        }
+        if (user.getStatus() != null && user.getStatus() == 0) {
+            throw new BusinessException(ErrorCode.USER_DISABLED);
+        }
+        if (!BCrypt.checkpw(dto.getPassword(), user.getPassword())) {
+            throw new BusinessException(ErrorCode.PASSWORD_ERROR);
+        }
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put(JwtClaimsConstant.USER_ID, user.getId());
+        claims.put(JwtClaimsConstant.USER_TYPE, user.getUserType());
+        String token = JwtUtil.createJWT(jwtProperties.getAdminSecretKey(), jwtProperties.getAdminTtl(), claims);
+
+        return LoginVO.builder()
+                .token(token)
+                .userInfo(toUserInfoVO(user))
+                .build();
+    }
+
+    @Override
+    public Page<AdminUserVO> adminListUsers(int page, int size, String username, String phone,
+                                            String email, Integer status, LocalDate startDate, LocalDate endDate) {
+        LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<>();
+        wrapper.like(username != null, SysUser::getUsername, username)
+                .like(phone != null, SysUser::getPhone, phone)
+                .like(email != null, SysUser::getEmail, email)
+                .eq(status != null, SysUser::getStatus, status)
+                .ge(startDate != null, SysUser::getCreateTime, startDate.atStartOfDay())
+                .le(endDate != null, SysUser::getCreateTime, endDate.plusDays(1).atStartOfDay())
+                .orderByDesc(SysUser::getCreateTime);
+
+        Page<SysUser> userPage = page(Page.of(page, size), wrapper);
+        Page<AdminUserVO> voPage = new Page<>(page, size, userPage.getTotal());
+        voPage.setRecords(userPage.getRecords().stream().map(this::toAdminUserVO).toList());
+        return voPage;
+    }
+
+    @Override
+    public AdminUserVO adminGetUser(Long userId) {
+        SysUser user = getById(userId);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+        return toAdminUserVO(user);
+    }
+
+    @Override
+    public void adminUpdateStatus(Long userId, Integer status) {
+        SysUser user = getById(userId);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+        user.setStatus(status);
+        updateById(user);
+        log.info("管理员 {} 更新用户 {} 状态为 {}", userId, user.getUsername(), status);
+    }
+
+    @Override
+    public void adminUpdateUser(Long userId, AdminUserUpdateDTO dto) {
+        SysUser user = getById(userId);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+        if (dto.getNickname() != null) user.setNickname(dto.getNickname());
+        if (dto.getPhone() != null) user.setPhone(dto.getPhone());
+        if (dto.getEmail() != null) user.setEmail(dto.getEmail());
+        if (dto.getSex() != null) user.setSex(dto.getSex());
+        if (dto.getBirthday() != null) user.setBirthday(LocalDate.parse(dto.getBirthday()));
+        updateById(user);
+    }
+
+    @Override
+    public void adminResetPassword(Long userId, String newPassword) {
+        SysUser user = getById(userId);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+        user.setPassword(BCrypt.hashpw(newPassword));
+        updateById(user);
+        log.info("管理员重置用户 {} 密码", user.getUsername());
+    }
+
+    @Override
+    public void adminSetUserRole(Long userId, Integer userType) {
+        if (userType != 1 && userType != 2) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户类型必须为 1（普通用户）或 2（管理员）");
+        }
+        SysUser user = getById(userId);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+        user.setUserType(userType);
+        updateById(user);
+        log.info("管理员更新用户 {} 角色为 {}", user.getUsername(), userType == 2 ? "管理员" : "普通用户");
+    }
+
     /**
      * <p>上传头像文件至阿里云 OSS 并更新用户记录。</p>
      *
@@ -410,6 +526,23 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
                 .userType(user.getUserType())
                 .status(user.getStatus())
                 .createTime(user.getCreateTime())
+                .build();
+    }
+
+    private AdminUserVO toAdminUserVO(SysUser user) {
+        return AdminUserVO.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .nickname(user.getNickname())
+                .avatar(user.getAvatar())
+                .phone(user.getPhone())
+                .email(user.getEmail())
+                .sex(user.getSex())
+                .birthday(user.getBirthday())
+                .userType(user.getUserType())
+                .status(user.getStatus())
+                .createTime(user.getCreateTime())
+                .updateTime(user.getUpdateTime())
                 .build();
     }
 }

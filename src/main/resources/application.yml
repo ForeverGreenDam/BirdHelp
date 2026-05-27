@@ -74,6 +74,9 @@ jwt:
   user-secret-key: ${jwt.user-secret-key}
   user-token-name: token
   user-ttl: 3600000
+  admin-secret-key: ${jwt.admin-secret-key}
+  admin-token-name: admin-token
+  admin-ttl: 7200000
 internal-api:
   public-key: ${internal-api.public-key}
   timestamp-window: 300
@@ -97,3 +100,5 @@ birdhelp:
     queue: birdhelp.doc.generation.tasks
     dlx: birdhelp.doc.generation.dlx
     dlq: birdhelp.doc.generation.dlq
+  api-key:
+    encryption-secret: ${api-key.encryption-secret}

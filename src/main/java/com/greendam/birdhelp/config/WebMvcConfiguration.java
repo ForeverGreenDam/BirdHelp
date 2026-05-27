@@ -1,5 +1,6 @@
 package com.greendam.birdhelp.config;
 
+import com.greendam.birdhelp.interceptor.JwtTokenAdminInterceptor;
 import com.greendam.birdhelp.interceptor.JwtTokenInterceptor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
@@ -37,6 +38,9 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
     @Resource
     private JwtTokenInterceptor jwtTokenUserInterceptor;
 
+    @Resource
+    private JwtTokenAdminInterceptor jwtTokenAdminInterceptor;
+
     /**
      * <p>注册 JWT 令牌校验拦截器并配置拦截范围。</p>
      *
@@ -55,6 +59,10 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
                         "/user/send-code",
                         "/user/reset-password"
                 );
+
+        registry.addInterceptor(jwtTokenAdminInterceptor)
+                .addPathPatterns("/admin/**")
+                .excludePathPatterns("/admin/login");
     }
 
 }

@@ -203,15 +203,16 @@ public class InternalApiCaller {
 
 ### 5.1 接口总览
 
-| 方法     | 路径                                 | Content-Type          | 说明              |
-|--------|------------------------------------|-----------------------|-----------------|
-| POST   | `/api/internal/quota/consume`      | `application/json`    | 扣减额度（生成前调用）     |
-| POST   | `/api/internal/quota/refund`       | `application/json`    | 退还额度（生成失败调用）    |
-| POST   | `/api/internal/file/upload`        | `multipart/form-data` | 上传文件（素材 / 生成结果） |
-| GET    | `/api/internal/file/{id}/download` | —                     | 下载文件（向量化等处理用）   |
-| DELETE | `/api/internal/file/{id}`          | —                     | 软删除文件，移入回收站     |
-| POST   | `/api/internal/task/callback`      | `application/json`    | 接收文档生成任务完成/失败回调 |
-| POST   | `/api/internal/task/progress`      | `application/json`    | 接收文档生成任务进度通知    |
+| 方法     | 路径                                 | Content-Type          | 说明                 |
+|--------|------------------------------------|-----------------------|--------------------|
+| POST   | `/api/internal/quota/consume`      | `application/json`    | 扣减额度（生成前调用）        |
+| POST   | `/api/internal/quota/refund`       | `application/json`    | 退还额度（生成失败调用）       |
+| POST   | `/api/internal/file/upload`        | `multipart/form-data` | 上传文件（素材 / 生成结果）    |
+| GET    | `/api/internal/file/{id}/download` | —                     | 下载文件（向量化等处理用）      |
+| DELETE | `/api/internal/file/{id}`          | —                     | 软删除文件，移入回收站        |
+| POST   | `/api/internal/task/callback`      | `application/json`    | 接收文档生成任务完成/失败回调    |
+| POST   | `/api/internal/task/progress`      | `application/json`    | 接收文档生成任务进度通知       |
+| POST   | `/api/internal/api-key/fetch`      | `application/json`    | 获取解密后的 LLM API Key |
 
 ### 5.2 通用签名工具函数
 
@@ -531,7 +532,66 @@ signed_json_request("POST", "/api/internal/task/progress", {
     "taskId": "...", "callbackId": "...", "status": "processing",
     "stage": "running_qa", "progress": 65, "message": "正在质量评审：第 10/15 页"
 })
+
+# 获取 LLM API Key
+signed_json_request("POST", "/api/internal/api-key/fetch", {})
+signed_json_request("POST", "/api/internal/api-key/fetch?providerName=openai", {})
+signed_json_request("POST", "/api/internal/api-key/fetch?modelType=chat", {})
 ```
+
+### 5.6 API Key 获取接口
+
+#### POST /api/internal/api-key/fetch — 获取解密后的 LLM API Key
+
+> Python AI 模块在初始化 LLM 客户端时调用，获取解密的 API Key 和 Base URL。无需每次生成都调用，建议加内存缓存（10 分钟 TTL）。
+
+| 参数           | 位置    | 类型     | 必填 | 说明                                   |
+|--------------|-------|--------|----|--------------------------------------|
+| providerName | query | string | 否  | 供应商名称过滤（`openai`、`qwen` 等）           |
+| modelType    | query | string | 否  | 模型类型过滤：`chat`-大语言模型，`embedding`-向量模型 |
+
+Body 固定为空 `{}`。
+
+```python
+# 获取所有启用的 Key
+resp = signed_json_request("POST", "/api/internal/api-key/fetch", {})
+
+# 按供应商过滤
+resp = signed_json_request("POST", "/api/internal/api-key/fetch?providerName=openai", {})
+
+# 按模型类型过滤（获取向量模型专用 Key）
+resp = signed_json_request("POST", "/api/internal/api-key/fetch?modelType=embedding", {})
+
+# 组合过滤（获取 OpenAI 的聊天模型 Key）
+resp = signed_json_request("POST", "/api/internal/api-key/fetch?providerName=openai&modelType=chat", {})
+```
+
+成功响应：
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": [
+    {
+      "providerName": "openai",
+      "apiKey": "sk-proj-xxxxxxxxxxxxxxxxxxxx",
+      "baseUrl": "https://api.openai.com/v1",
+      "modelName": "gpt-4o",
+      "modelType": "chat"
+    },
+    {
+      "providerName": "openai",
+      "apiKey": "sk-proj-xxxxxxxxxxxxxxxxxxxx",
+      "baseUrl": "https://api.openai.com/v1",
+      "modelName": "text-embedding-3-small",
+      "modelType": "embedding"
+    }
+  ]
+}
+```
+
+> 详细集成方案见 `PYTHON_API_KEY_INTEGRATION.md`。
 
 ---
 

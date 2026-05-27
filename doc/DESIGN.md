@@ -8,7 +8,7 @@
 
 与 AI 模块的关系：Java 后端通过定义好的内部接口调用 AI 模块（另建工程），自身不实现任何 AI 逻辑。
 
-当前模块：用户、项目、额度、文件、会员、AI 对接。
+当前模块：用户、项目、额度、文件、会员、AI 对接、管理员后台、公告、LLM API Key 管理。
 
 ---
 
@@ -399,6 +399,7 @@ Java 后端（本工程）                  AI 模块（另建工程）
 | DELETE | /internal/file/{id}          | AI 模块软删除文件，移入回收站（Query 含 userId）       |
 | POST   | /internal/task/callback      | 接收文档生成任务完成/失败回调                        |
 | POST   | /internal/task/progress      | 接收文档生成任务进度通知（可选）                       |
+| POST   | /internal/api-key/fetch      | AI 模块获取解密后的 LLM API Key 及 Base URL     |
 
 ### 7.4 Java 后端调用 AI 模块的内部接口
 
@@ -474,7 +475,213 @@ Python AI 模块（消费者）:
 
 ---
 
-## 八、技术选型
+## 八、管理员后台模块 (admin)
+
+### 8.1 概述
+
+管理员后台使用独立的 JWT 密钥（`admin-secret-key`）签发令牌，与用户端 JWT 隔离。所有管理员接口位于 `/admin/**` 路径下，由
+`JwtTokenAdminInterceptor` 拦截校验。
+
+### 8.2 功能点
+
+- **管理员登录**：仅 `user_type=2` 用户可登录后台
+- **用户管理**：列表查询（分页 + 多条件筛选）、详情、封禁/启用、修改信息、重置密码、设置/撤销管理员角色
+- **额度管理**：额度配置 CRUD、用户额度列表/调整/修改会员等级、额度流水查询
+- **API Key 管理**：LLM 密钥的 CRUD（AES 加密存储），支持启用/禁用，提供内部接口供 Python 获取解密密钥
+- **操作日志**：记录管理员敏感操作（类型、目标、详情），支持多条件查询
+- **数据看板**：总用户数、今日新增、项目/文件总数、今日生成任务数、会员等级分布
+- **项目管理**：查看所有用户项目、删除违规项目
+- **文件管理**：查看所有用户文件、删除违规文件
+- **任务管理**：查看所有生成任务状态、重试失败任务
+
+### 8.3 接口列表
+
+#### 管理员登录
+
+| 方法   | 路径               | 说明    |
+|------|------------------|-------|
+| POST | /api/admin/login | 管理员登录 |
+
+#### 用户管理
+
+| 方法  | 路径                            | 说明                                         |
+|-----|-------------------------------|--------------------------------------------|
+| GET | /api/admin/user/list          | 用户列表（分页，筛选 username/phone/email/status/日期） |
+| GET | /api/admin/user/{id}          | 用户详情                                       |
+| PUT | /api/admin/user/{id}/status   | 封禁/启用（status: 0-禁用 1-正常）                   |
+| PUT | /api/admin/user/{id}          | 修改用户信息                                     |
+| PUT | /api/admin/user/{id}/password | 重置密码                                       |
+| PUT | /api/admin/user/{id}/role     | 设置角色（userType: 1-普通 2-管理员）                 |
+
+#### 额度管理
+
+| 方法  | 路径                           | 说明     |
+|-----|------------------------------|--------|
+| GET | /api/admin/quota/config/list | 额度配置列表 |
+| PUT | /api/admin/quota/config      | 修改额度配置 |
+| GET | /api/admin/quota/user/list   | 用户额度列表 |
+| PUT | /api/admin/quota/user/adjust | 手动调整额度 |
+| PUT | /api/admin/quota/user/member | 修改会员等级 |
+| GET | /api/admin/quota/log/list    | 额度流水查询 |
+
+#### API Key 管理
+
+| 方法     | 路径                              | 说明         |
+|--------|---------------------------------|------------|
+| GET    | /api/admin/api-key/list         | Key 列表（脱敏） |
+| GET    | /api/admin/api-key/{id}         | Key 详情（解密） |
+| POST   | /api/admin/api-key              | 新增 Key     |
+| PUT    | /api/admin/api-key              | 修改 Key     |
+| DELETE | /api/admin/api-key/{id}         | 删除 Key     |
+| PUT    | /api/admin/api-key/{id}/enabled | 启用/禁用      |
+
+#### 操作日志
+
+| 方法  | 路径                            | 说明     |
+|-----|-------------------------------|--------|
+| GET | /api/admin/operation-log/list | 操作日志列表 |
+
+#### 数据看板
+
+| 方法  | 路径                         | 说明     |
+|-----|----------------------------|--------|
+| GET | /api/admin/dashboard/stats | 看板统计数据 |
+
+#### 项目管理
+
+| 方法     | 路径                      | 说明     |
+|--------|-------------------------|--------|
+| GET    | /api/admin/project/list | 所有项目列表 |
+| GET    | /api/admin/project/{id} | 项目详情   |
+| DELETE | /api/admin/project/{id} | 删除项目   |
+
+#### 文件管理
+
+| 方法     | 路径                   | 说明     |
+|--------|----------------------|--------|
+| GET    | /api/admin/file/list | 所有文件列表 |
+| DELETE | /api/admin/file/{id} | 删除文件   |
+
+#### 任务管理
+
+| 方法   | 路径                             | 说明     |
+|------|--------------------------------|--------|
+| GET  | /api/admin/task/list           | 所有任务列表 |
+| POST | /api/admin/task/{taskId}/retry | 重试失败任务 |
+
+---
+
+## 九、公告模块 (announcement)
+
+### 9.1 功能点
+
+管理员可发布系统公告（支持草稿/已发布状态），用户端查询已发布公告。
+
+### 9.2 接口列表
+
+**管理员端（需 Admin Token）**：
+
+| 方法     | 路径                           | 说明   |
+|--------|------------------------------|------|
+| GET    | /api/admin/announcement/list | 公告列表 |
+| GET    | /api/admin/announcement/{id} | 公告详情 |
+| POST   | /api/admin/announcement      | 新增公告 |
+| PUT    | /api/admin/announcement      | 修改公告 |
+| DELETE | /api/admin/announcement/{id} | 删除公告 |
+
+**用户端（无需登录）**：
+
+| 方法  | 路径                       | 说明        |
+|-----|--------------------------|-----------|
+| GET | /api/announcement/active | 查询已发布公告列表 |
+
+### 9.3 核心表
+
+```sql
+CREATE TABLE `announcement` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `title` varchar(200) NOT NULL COMMENT '公告标题',
+    `content` text NOT NULL COMMENT '公告内容',
+    `status` tinyint DEFAULT 0 COMMENT '发布状态 0-草稿 1-已发布',
+    `publish_time` datetime DEFAULT NULL COMMENT '发布时间',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `create_by` varchar(64) DEFAULT '',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `update_by` varchar(64) DEFAULT '',
+    `del_flag` tinyint DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_status_publish_time` (`status`, `publish_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='公告表';
+```
+
+---
+
+## 十、LLM API Key 管理模块
+
+### 10.1 概述
+
+所有大模型 API 密钥统一由 Java 后端 AES 加密存储、管理。Python AI 模块通过 RSA 签名的内部接口动态获取解密后的密钥和 Base
+URL，不再需要在 `.env` 文件中硬编码。
+
+### 10.2 核心表
+
+```sql
+CREATE TABLE `api_key` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `provider_name` varchar(50) NOT NULL COMMENT '供应商名称',
+    `api_key` varchar(2000) NOT NULL COMMENT '加密后的API密钥值',
+    `base_url` varchar(500) DEFAULT '' COMMENT 'API基础地址',
+    `model_name` varchar(100) DEFAULT '' COMMENT '关联模型名称',
+    `model_type` varchar(20) DEFAULT 'chat' COMMENT '模型类型: chat-大语言模型, embedding-向量模型',
+    `enabled` tinyint DEFAULT 1 COMMENT '启用状态 0-禁用 1-启用',
+    `description` varchar(255) DEFAULT '' COMMENT '备注说明',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `create_by` varchar(64) DEFAULT '',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `update_by` varchar(64) DEFAULT '',
+    `del_flag` tinyint DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_provider_name` (`provider_name`),
+    KEY `idx_enabled` (`enabled`),
+    KEY `idx_model_type` (`model_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='LLM API密钥配置表';
+```
+
+### 10.3 内部接口
+
+| 方法   | 路径                          | 说明                    |
+|------|-----------------------------|-----------------------|
+| POST | /api/internal/api-key/fetch | Python 获取解密密钥（RSA 签名） |
+
+参数：`providerName`（可选）、`modelType`（可选，`chat` / `embedding`）。返回解密后的 apiKey、baseUrl、modelName、modelType。
+
+---
+
+## 十一、操作日志模块
+
+### 11.1 核心表
+
+```sql
+CREATE TABLE `operation_log` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `admin_id` bigint NOT NULL COMMENT '操作管理员ID',
+    `admin_name` varchar(50) DEFAULT '' COMMENT '操作管理员用户名',
+    `action` varchar(50) NOT NULL COMMENT '操作类型',
+    `target_type` varchar(50) NOT NULL COMMENT '操作目标类型',
+    `target_id` varchar(64) DEFAULT '' COMMENT '操作目标ID',
+    `detail` varchar(500) DEFAULT '' COMMENT '操作详情',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_admin_id` (`admin_id`),
+    KEY `idx_action` (`action`),
+    KEY `idx_target_type` (`target_type`),
+    KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='管理员操作日志表';
+```
+
+---
+
+## 十二、技术选型（原八）
 
 | 组件     | 选型                     | 说明                   |
 |--------|------------------------|----------------------|
@@ -492,7 +699,7 @@ Python AI 模块（消费者）:
 
 ---
 
-## 九、工程结构
+## 十三、工程结构
 
 ```
 src/main/java/com/greendam/birdhelp/
@@ -520,7 +727,7 @@ src/main/java/com/greendam/birdhelp/
 
 ---
 
-## 十、开发顺序
+## 十四、开发顺序
 
 ### 第一阶段：基础骨架 ✅
 - [x] 工程初始化
@@ -538,6 +745,9 @@ src/main/java/com/greendam/birdhelp/
 - [x] 内部接口签名验证（`/api/internal/**` 的 RSA 验签过滤器 SignFilter）
 - [x] 文档生成异步化（RabbitMQ 消息投递、TaskInternalController 回调、SignFilter 覆盖 /internal/task/*）
 - [x] RabbitMQ 拓扑搭建（Exchange birdhelp.doc.generation、Queue birdhelp.doc.generation.tasks、DLX/DLQ）
+- [x] 管理员后台（登录、用户管理、额度管理、API Key 管理、操作日志、看板、项目/文件/任务管理）
+- [x] 系统公告模块（管理员 CRUD + 用户端查询）
+- [x] LLM API Key 管理（AES 加密存储 + Python 内部接口获取）
 
 ### 第三阶段：商业化
 - [ ] 会员模块（套餐、订单、支付回调）

@@ -5,8 +5,6 @@ package com.greendam.birdhelp.constant;
  * @author ForeverGreenDam
  */
 public interface JwtClaimsConstant {
-    /**
-     * 用户ID
-     */
-    String USER_ID="id";
+    String USER_ID = "id";
+    String USER_TYPE = "userType";
 }

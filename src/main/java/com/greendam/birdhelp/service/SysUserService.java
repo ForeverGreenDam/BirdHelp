@@ -1,10 +1,16 @@
 package com.greendam.birdhelp.service;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.greendam.birdhelp.model.dto.*;
+import com.greendam.birdhelp.model.dto.admin.AdminLoginDTO;
+import com.greendam.birdhelp.model.dto.admin.AdminUserUpdateDTO;
 import com.greendam.birdhelp.model.entity.SysUser;
 import com.greendam.birdhelp.model.vo.LoginVO;
 import com.greendam.birdhelp.model.vo.UserInfoVO;
+import com.greendam.birdhelp.model.vo.admin.AdminUserVO;
+
+import java.time.LocalDate;
 
 /**
  * <p>
@@ -122,6 +128,23 @@ public interface SysUserService extends IService<SysUser> {
      *         </ul>
      */
     void resetPassword(ResetPasswordDTO dto);
+
+    /**
+     * 管理员登录。仅允许 userType=2 的用户登录，使用管理员 JWT 密钥签发令牌。
+     */
+    LoginVO adminLogin(AdminLoginDTO dto);
+
+    Page<AdminUserVO> adminListUsers(int page, int size, String username, String phone, String email, Integer status, LocalDate startDate, LocalDate endDate);
+
+    AdminUserVO adminGetUser(Long userId);
+
+    void adminUpdateStatus(Long userId, Integer status);
+
+    void adminUpdateUser(Long userId, AdminUserUpdateDTO dto);
+
+    void adminResetPassword(Long userId, String newPassword);
+
+    void adminSetUserRole(Long userId, Integer userType);
 
     /**
      * <p>上传用户头像至 OSS 并更新数据库记录。</p>

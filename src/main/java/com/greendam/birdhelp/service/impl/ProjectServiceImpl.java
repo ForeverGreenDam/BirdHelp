@@ -139,6 +139,27 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project>
         update(wrapper);
     }
 
+    @Override
+    public Page<Project> adminListProjects(int page, int size, String name, Long userId, Integer status) {
+        LambdaQueryWrapper<Project> wrapper = new LambdaQueryWrapper<>();
+        wrapper.like(name != null, Project::getName, name)
+                .eq(userId != null, Project::getUserId, userId)
+                .eq(status != null, Project::getStatus, status)
+                .orderByDesc(Project::getUpdateTime);
+        return page(Page.of(page, size), wrapper);
+    }
+
+    @Override
+    public void adminDeleteProject(Long id) {
+        Project project = getById(id);
+        if (project == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "项目不存在");
+        }
+        removeById(id);
+        cascadeSoftDeleteFiles(id);
+        log.info("管理员删除项目: id={}, name={}", id, project.getName());
+    }
+
     // ==================== 内部方法 ====================
 
     /**

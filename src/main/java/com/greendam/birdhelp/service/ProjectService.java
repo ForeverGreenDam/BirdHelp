@@ -91,4 +91,8 @@ public interface ProjectService extends IService<Project> {
      * @param projectId 项目 ID
      */
     void decrementFileCount(Long projectId);
+
+    Page<Project> adminListProjects(int page, int size, String name, Long userId, Integer status);
+
+    void adminDeleteProject(Long id);
 }

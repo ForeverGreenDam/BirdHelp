@@ -283,6 +283,34 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
     }
 
     @Override
+    public Page<FileRecord> adminListFiles(int page, int size, Long userId, Long projectId,
+                                           String fileName, Integer fileType) {
+        LambdaQueryWrapper<FileRecord> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(userId != null, FileRecord::getUserId, userId)
+                .eq(projectId != null, FileRecord::getProjectId, projectId)
+                .like(fileName != null, FileRecord::getFileName, fileName)
+                .eq(fileType != null, FileRecord::getFileType, fileType)
+                .eq(FileRecord::getDeleted, 0)
+                .orderByDesc(FileRecord::getCreateTime);
+        return page(Page.of(page, size), wrapper);
+    }
+
+    @Override
+    public void adminDeleteFile(Long id) {
+        FileRecord record = getById(id);
+        if (record == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文件不存在");
+        }
+        try {
+            fileStorageService.delete(record.getFileUrl());
+        } catch (Exception e) {
+            log.warn("管理员删除物理文件失败: url={}", record.getFileUrl(), e);
+        }
+        removeById(id);
+        log.info("管理员删除文件: id={}, fileName={}", id, record.getFileName());
+    }
+
+    @Override
     public int cleanExpiredRecycle() {
         LocalDateTime threshold = LocalDateTime.now().minusDays(RECYCLE_DAYS);
         LambdaQueryWrapper<FileRecord> wrapper = new LambdaQueryWrapper<FileRecord>()

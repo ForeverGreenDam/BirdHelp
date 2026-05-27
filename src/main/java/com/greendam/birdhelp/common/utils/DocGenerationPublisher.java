@@ -1,5 +1,6 @@
 package com.greendam.birdhelp.common.utils;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.greendam.birdhelp.config.RabbitMQConfig;
 import com.greendam.birdhelp.exception.BusinessException;
 import com.greendam.birdhelp.exception.ErrorCode;
@@ -11,9 +12,11 @@ import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -29,6 +32,10 @@ public class DocGenerationPublisher {
     private RabbitTemplate rabbitTemplate;
     @Resource
     private RabbitMQProperties mqProperties;
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+    @Resource
+    private ObjectMapper objectMapper;
 
     /**
      * 发布 PPT 生成任务。
@@ -134,6 +141,13 @@ public class DocGenerationPublisher {
 
     private void send(DocGenerationMessage msg, String routingKey, int priority) {
         try {
+            String taskKey = "task:" + msg.getTaskId();
+            String messageKey = taskKey + ":message";
+            String routingKeyKey = taskKey + ":routingKey";
+
+            stringRedisTemplate.opsForValue().set(messageKey, objectMapper.writeValueAsString(msg), Duration.ofHours(24));
+            stringRedisTemplate.opsForValue().set(routingKeyKey, routingKey, Duration.ofHours(24));
+
             CorrelationData correlationData = new CorrelationData(msg.getTaskId());
 
             rabbitTemplate.convertAndSend(mqProperties.getExchange(), routingKey, msg,
