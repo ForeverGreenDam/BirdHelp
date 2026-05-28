@@ -1,5 +1,6 @@
 package com.greendam.birdhelp.service.admin.impl;
 
+import cn.hutool.crypto.digest.DigestUtil;
 import cn.hutool.crypto.symmetric.AES;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -16,11 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * API密钥管理服务实现类。
@@ -185,6 +182,15 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey> impleme
         return result;
     }
 
+    private byte[] keyBytes() {
+        byte[] hash = DigestUtil.sha256(encryptionSecret);
+        return Arrays.copyOfRange(hash, 0, 16);
+    }
+
+    private byte[] ivBytes() {
+        byte[] hash = DigestUtil.sha256(encryptionSecret);
+        return Arrays.copyOfRange(hash, 16, 32);
+    }
     /**
      * 使用AES算法加密API密钥明文。
      * <p>
@@ -196,25 +202,12 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey> impleme
      * @return Base64编码的加密密文
      */
     private String encryptKey(String rawKey) {
-        AES aes = new AES("CBC", "PKCS7Padding",
-                encryptionSecret.getBytes(StandardCharsets.UTF_8),
-                encryptionSecret.substring(0, 16).getBytes(StandardCharsets.UTF_8));
+        AES aes = new AES("CBC", "PKCS7Padding", keyBytes(), ivBytes());
         return aes.encryptBase64(rawKey);
     }
 
-    /**
-     * 解密AES加密的API密钥密文。
-     * <p>
-     * 使用与加密时相同的密钥和参数进行解密，还原出API密钥明文。
-     * </p>
-     *
-     * @param encryptedKey Base64编码的加密密文
-     * @return 解密后的API密钥明文
-     */
     private String decryptKey(String encryptedKey) {
-        AES aes = new AES("CBC", "PKCS7Padding",
-                encryptionSecret.getBytes(StandardCharsets.UTF_8),
-                encryptionSecret.substring(0, 16).getBytes(StandardCharsets.UTF_8));
+        AES aes = new AES("CBC", "PKCS7Padding", keyBytes(), ivBytes());
         return aes.decryptStr(encryptedKey);
     }
 
