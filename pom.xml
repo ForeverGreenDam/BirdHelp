@@ -99,6 +99,25 @@
             <artifactId>bcprov-jdk18on</artifactId>
             <version>1.78.1</version>
         </dependency>
+
+        <!-- PDFBox：PDF 渲染引擎，用于文件预览逐页渲染 PNG -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>2.0.30</version>
+        </dependency>
+
+        <!-- TwelveMonkeys ImageIO：扩展 JPEG/PNG 编码能力，配合 PDFBox 渲染使用 -->
+        <dependency>
+            <groupId>com.twelvemonkeys.imageio</groupId>
+            <artifactId>imageio-jpeg</artifactId>
+            <version>3.10.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.twelvemonkeys.imageio</groupId>
+            <artifactId>imageio-core</artifactId>
+            <version>3.10.1</version>
+        </dependency>
     </dependencies>
     <dependencyManagement>
         <dependencies>

@@ -31,4 +31,11 @@ public class FileInternalUploadDTO {
      */
     @NotNull(message = "文件名不能为空")
     private String fileName;
+
+    /**
+     * 上一版本文件 ID（可选）。修改版文件上传时携带此字段，
+     * Java 据此建立版本链（{@code file_record.version_of = versionOf}）。
+     * 原始生成文件不传此字段（{@code null}）。
+     */
+    private Long versionOf;
 }

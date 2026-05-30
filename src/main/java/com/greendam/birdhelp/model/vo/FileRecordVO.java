@@ -39,6 +39,16 @@ public class FileRecordVO {
      */
     private String fileUrl;
 
+    /**
+     * 文档大纲 JSON（按需填充，仅对话修改/预览场景使用）
+     */
+    private String outline;
+
+    /**
+     * 上一版本文件 ID（修改链，按需填充）
+     */
+    private Long versionOf;
+
     /** 回收站标记：0-正常，1-回收站 */
     private Integer deleted;
 

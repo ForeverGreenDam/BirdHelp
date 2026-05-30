@@ -33,6 +33,7 @@ com.greendam.birdhelp
 ├── constant/                 (ErrorConstant, JwtClaimsConstant, UserRoleConstant)
 ├── controller/
 │   ├── AnnouncementController    (user-facing announcement query)
+│   ├── ChatController            (chat/modify + chat/discuss proxy → Python AI) [v5.2]
 │   ├── admin/                    (admin-side controllers — protected by JwtTokenAdminInterceptor)
 │   │   ├── AdminAuthController       (admin login)
 │   │   ├── AdminUserController       (user CRUD)
@@ -58,14 +59,20 @@ com.greendam.birdhelp
 ├── internal/                 (internal controllers for AI module — RSA signed)
 │   ├── FileInternalController
 │   ├── QuotaInternalController
-│   ├── TaskInternalController  (task callback + progress)
+│   ├── TaskInternalController  (task callback + progress → writes outline to DB)
+│   ├── ChatInternalController  (outline read/write + chat session CRUD)
 │   └── ApiKeyInternalController (fetch decrypted API keys for LLM calls)
 ├── mapper/                   (MyBatis-Plus mapper interfaces)
+│   ├── ChatSessionMapper     (chat_session table)
+│   └── ChatMessageMapper     (chat_message table)
 ├── model/
-│   ├── entity/               (BaseEntity audit superclass, SysUser, ApiKey, OperationLog, Announcement, ...)
+│   ├── entity/               (BaseEntity audit superclass, SysUser, ApiKey, OperationLog, Announcement,
+│   │                          FileRecord, ChatSession, ChatMessage, ...)
 │   ├── dto/
 │   │   └── admin/            (AdminLoginDTO, ApiKeyCreateDTO, AnnouncementCreateDTO, ...)
 │   └── vo/
+│       ├── PreviewVO         (fileId, totalPages, pages[{pageNumber, imageUrl, layoutType, title}])
+│       ├── PreviewPage       (single page preview data)
 │       └── admin/            (AdminUserVO, ApiKeyVO, DashboardVO, ...)
 ├── properties/               (@ConfigurationProperties classes, incl. RabbitMQProperties)
 └── service/
@@ -74,6 +81,8 @@ com.greendam.birdhelp
     │   ├── OperationLogService / impl
     │   ├── AnnouncementService / impl
     │   └── DashboardService / impl
+    ├── ChatSessionService / impl  (chat session CRUD + message management)
+    ├── PreviewService / impl      (LibreOffice → PDFBox → PNG preview pipeline)
     └── impl/                     (existing services: SysUser, Quota, Project, File)
 ```
 
@@ -103,6 +112,20 @@ The fetch endpoint is only used at startup to initialize the embedding model.
 exchange `birdhelp.doc.generation` with routing keys `doc.generate.ppt`/`word`/`pdf`. Python AI module consumes from
 `birdhelp.doc.generation.tasks` queue, generates the document, uploads the file, and calls back to
 `/internal/task/callback`. Task results are stored in Redis (24h TTL). Full protocol: `doc/RABBITMQ_ASYNC_PROTOCOL.md`.
+
+**File version chain:** Modified files form a linked list via `file_record.version_of`. List queries only show
+chain-tail
+files (id NOT IN (SELECT DISTINCT version_of FROM file_record WHERE version_of IS NOT NULL AND deleted = 0)).
+
+**RAG dedup:** Only user-uploaded files (source=1) are ingested into the vector store; AI-generated files (source=2) are
+skipped.
+
+**File preview:** `GET /api/file/{id}/preview` returns per-page preview images. Pipeline: LibreOffice headless → PDF →
+PDFBox 150 DPI PNG → OSS. Three-level cache: Redis 1h hot cache → MySQL `preview_pages` → re-render.
+
+**Chat modify:** `ChatInternalController` provides internal APIs for Python to read/write document outlines and manage
+chat sessions (`chat_session` + `chat_message` tables). Python's `POST /ai/chat/modify` endpoint orchestrates the LLM
+modification flow.
 
 ## Conventions
 

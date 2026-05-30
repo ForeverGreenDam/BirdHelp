@@ -239,6 +239,8 @@ public class AiModuleCaller {
 | DELETE | `/ai/material/{id}`              | —                     | 删除素材（Java 软删除 + 向量清理） |
 | POST   | `/ai/material/{id}/reindex`      | —                     | 回收站恢复后重建向量索引          |
 | POST   | `/ai/material/{id}/vector-purge` | —                     | 强制删除后清理残留向量           |
+| POST   | `/ai/chat/modify`                | `application/json`    | 对话修改文档（v5.2 新增）       |
+| POST   | `/ai/chat/discuss`               | `application/json`    | 仅讨论/问答（v5.2 新增）       |
 
 ### 5.2 统一响应格式
 
@@ -406,6 +408,71 @@ Java 后端需：
 2. 实现 `POST /api/internal/task/callback` 接收 Python 的完成/失败回调
 
 > 完整协议规范见 `doc/RABBITMQ_ASYNC_PROTOCOL.md`
+
+### 5.8 POST /ai/chat/modify — 对话修改文档（v5.2 新增）
+
+通过 LLM 修改文档大纲并重建文件。流程：获取大纲 → LLM 修改 → 校验 → 重建 → 上传 → 同步会话。
+
+**请求**：`POST /ai/chat/modify`
+
+```json
+{
+  "userId": "1",
+  "projectId": "1",
+  "sessionId": "uuid-v4",
+  "fileId": "100",
+  "docType": "ppt",
+  "message": "把第二页标题改得激进一些",
+  "history": [
+    {
+      "role": "user",
+      "content": "..."
+    },
+    {
+      "role": "assistant",
+      "content": "..."
+    }
+  ],
+  "regenerateFile": true,
+  "callbackId": "cb-xxx"
+}
+```
+
+**响应**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "sessionId": "uuid-v4",
+    "reply": "已根据您的指令修改文档大纲（3 处变更）。",
+    "outline": {
+      "slides": [
+        ...
+      ]
+    },
+    "changes": [
+      {
+        "page_number": 2,
+        "action": "modified",
+        "summary": "标题已修改"
+      }
+    ],
+    "fileId": "101",
+    "fileUrl": "https://...",
+    "success": true
+  }
+}
+```
+
+### 5.9 POST /ai/chat/discuss — 仅讨论/问答（v5.2 新增）
+
+仅 LLM 文本回复，不重建文件（`regenerateFile=false`）。
+
+**请求**：`POST /ai/chat/discuss`，参数同 `/modify` 但无需 `regenerateFile` 字段。
+
+**响应**：与 `/modify` 类似，但 `fileId` 和 `fileUrl` 均为 `null`。
 
 ---
 

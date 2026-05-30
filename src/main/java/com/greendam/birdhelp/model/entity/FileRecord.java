@@ -79,9 +79,29 @@ public class FileRecord extends BaseEntity {
     private String fileUrl;
 
     /**
+     * 文档大纲 JSON（AI 模块回调回传），包含 {@code layout_type}、{@code visual_plan}、
+     * {@code image_query} 等元信息。可用于对话修改和预览布局标注。
+     */
+    private String outline;
+
+    /**
+     * 预览页面缓存 JSON，格式为
+     * {@code {"fileHash":"...","pages":[{"pageNumber":1,"imageUrl":"...","layoutType":"...","title":"..."}]}}。
+     * 由 {@code PreviewService} 渲染后写入。
+     */
+    private String previewPages;
+
+    /**
      * 文件来源：{@code 1} - 用户上传，{@code 2} - AI 生成。
      */
     private Integer source;
+
+    /**
+     * 上一版本文件 ID（修改链），自引用 {@code file_record.id}。
+     * {@code NULL} 表示原始文件或独立文件（非修改链成员）。
+     * 列表查询时只展示链尾文件（即未被其他 {@code version_of} 指向的记录）。
+     */
+    private Long versionOf;
 
     /**
      * 回收站标记：{@code 0} - 正常，{@code 1} - 回收站。

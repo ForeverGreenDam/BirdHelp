@@ -18,9 +18,11 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * AI 模块调用客户端，对 /ai/material/** 素材管理接口发起带 RSA 签名的 HTTP 请求。
+ * AI 模块调用客户端，对 /ai/** 接口发起带 RSA 签名的 HTTP 请求。
  *
  * <p>文档生成（PPT/Word/PDF）已迁移至 RabbitMQ 异步消息，不再通过本类调用。</p>
+ *
+ * <p>v5.2 新增对话修改代理方法（{@code chatModify} / {@code chatDiscuss}）。</p>
  *
  * @author ForeverGreenDam
  */
@@ -108,6 +110,42 @@ public class AiModuleCaller {
         } catch (Exception e) {
             log.error("AI 向量重建失败: materialId={}, userId={}, projectId={}", materialId, userId, projectId, e);
         }
+    }
+
+    /**
+     * 代理调用 Python {@code POST /ai/chat/modify} 对话修改接口。
+     *
+     * <p>流程：前端 → 本方法（RSA 签名）→ Python modify 模块 → LLM 修改 + 重建文件 → 返回结果</p>
+     *
+     * @param requestBody 请求 JSON 字符串（由 ChatController 序列化传入）
+     * @return Python 返回的响应体字符串（JSON 格式）
+     * @throws Exception 网络异常或签名失败时抛出
+     */
+    public String chatModify(String requestBody) throws Exception {
+        if (!isReady()) {
+            return "{\"code\":50000,\"message\":\"AI 模块未配置私钥\",\"data\":null}";
+        }
+        HttpResponse<String> resp = signedJsonRequest("POST", "/ai/chat/modify", requestBody);
+        log.info("AI 对话修改完成: status={}, bodyLen={}", resp.statusCode(),
+                resp.body() != null ? resp.body().length() : 0);
+        return resp.body();
+    }
+
+    /**
+     * 代理调用 Python {@code POST /ai/chat/discuss} 对话讨论接口（仅问答，不重建文件）。
+     *
+     * @param requestBody 请求 JSON 字符串（由 ChatController 序列化传入）
+     * @return Python 返回的响应体字符串（JSON 格式）
+     * @throws Exception 网络异常或签名失败时抛出
+     */
+    public String chatDiscuss(String requestBody) throws Exception {
+        if (!isReady()) {
+            return "{\"code\":50000,\"message\":\"AI 模块未配置私钥\",\"data\":null}";
+        }
+        HttpResponse<String> resp = signedJsonRequest("POST", "/ai/chat/discuss", requestBody);
+        log.info("AI 对话讨论完成: status={}, bodyLen={}", resp.statusCode(),
+                resp.body() != null ? resp.body().length() : 0);
+        return resp.body();
     }
 
     /**

@@ -16,6 +16,7 @@ public class TaskCallbackRequest {
     private Long fileId;
     private String fileUrl;
     private String fileName;
+    private String outline;
     private Integer qaLowestScore;
     private Integer qaPassedCount;
     private Integer qaTotalCount;

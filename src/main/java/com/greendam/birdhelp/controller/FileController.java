@@ -7,8 +7,10 @@ import com.greendam.birdhelp.common.context.BaseContext;
 import com.greendam.birdhelp.exception.ErrorCode;
 import com.greendam.birdhelp.model.entity.FileRecord;
 import com.greendam.birdhelp.model.vo.FileRecordVO;
+import com.greendam.birdhelp.model.vo.PreviewVO;
 import com.greendam.birdhelp.service.FileService;
 import com.greendam.birdhelp.service.FileStorageService;
+import com.greendam.birdhelp.service.PreviewService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -42,6 +44,9 @@ public class FileController {
 
     @Resource
     private FileStorageService fileStorageService;
+
+    @Resource
+    private PreviewService previewService;
 
     @Resource
     private ObjectMapper objectMapper;
@@ -94,11 +99,15 @@ public class FileController {
     }
 
     /**
-     * 文件列表，支持按类型筛选、分页、按时间倒序。
+     * 文件列表（含搜索），支持按类型/来源筛选、关键词模糊搜索、分页、按时间倒序。
+     * 仅展示链尾文件（被 version_of 指向的旧版本自动隐藏）。
      *
-     * @param page     页码，默认 1
-     * @param size     每页条数，默认 10
-     * @param fileType 文件类型（可选）：1-PPT 2-Word 3-PDF 4-图片 5-其他
+     * @param page      页码，默认 1
+     * @param size      每页条数，默认 10
+     * @param fileType  文件类型（可选）：1-PPT 2-Word 3-PDF 4-图片 5-其他
+     * @param source    文件来源（可选）：1-用户上传(知识库) 2-AI生成，不传则全部
+     * @param keyword   搜索关键词（可选），按文件名模糊匹配
+     * @param projectId 项目 ID
      * @return 分页文件列表
      */
     @GetMapping("/list")
@@ -106,28 +115,11 @@ public class FileController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) Integer fileType,
+            @RequestParam(required = false) Integer source,
+            @RequestParam(required = false) String keyword,
             @RequestParam Long projectId) {
         Long userId = BaseContext.getCurrentId();
-        Page<FileRecordVO> result = fileService.listFiles(page, size, fileType, projectId, userId);
-        return BaseResponse.success(result);
-    }
-
-    /**
-     * 按文件名模糊搜索。
-     *
-     * @param keyword 搜索关键词
-     * @param page    页码，默认 1
-     * @param size    每页条数，默认 10
-     * @return 分页搜索结果
-     */
-    @GetMapping("/search")
-    public BaseResponse<Page<FileRecordVO>> search(
-            @RequestParam String keyword,
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam Long projectId) {
-        Long userId = BaseContext.getCurrentId();
-        Page<FileRecordVO> result = fileService.searchFiles(keyword, page, size, projectId, userId);
+        Page<FileRecordVO> result = fileService.listFiles(page, size, fileType, source, keyword, projectId, userId);
         return BaseResponse.success(result);
     }
 
@@ -168,6 +160,28 @@ public class FileController {
         Long userId = BaseContext.getCurrentId();
         fileService.permanentDelete(id, userId);
         return BaseResponse.success();
+    }
+
+    /**
+     * 获取文件预览数据（多级缓存：Redis → MySQL → 重新渲染）。
+     * <p>渲染管道：LibreOffice 无头转 PDF → PDFBox 逐页渲染 150 DPI PNG → 上传 OSS。</p>
+     *
+     * @param id 文件记录 ID
+     * @return 预览数据（fileId、totalPages、pages[{pageNumber, imageUrl, layoutType, title}]）
+     */
+    @GetMapping("/{id}/preview")
+    public BaseResponse<PreviewVO> preview(@PathVariable Long id) {
+        Long userId = BaseContext.getCurrentId();
+        // 校验文件归属
+        FileRecord record = fileService.getById(id);
+        if (record == null || record.getDeleted() == 1) {
+            return BaseResponse.error(ErrorCode.NOT_FOUND_ERROR, "文件不存在");
+        }
+        if (!record.getUserId().equals(userId)) {
+            return BaseResponse.error(ErrorCode.NOT_AUTH_ERROR, "无权访问该文件");
+        }
+        PreviewVO vo = previewService.getPreview(id);
+        return BaseResponse.success(vo);
     }
 
     /**

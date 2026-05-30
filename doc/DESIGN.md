@@ -1,5 +1,7 @@
 # BirdHelp 后端设计文档
 
+> v5.2 | 2026-05-30 | 新增对话修改代理、文件预览、版本链、知识库视图、大纲管理、会话存储
+>
 > 本文档仅覆盖 Java 传统业务后端。AI 生成相关功能放在另一个独立模块中。
 
 ---
@@ -237,8 +239,8 @@ CREATE TABLE `quota_log` (
 
 - 文件上传（参考资料上传、生成结果存储）
 - 文件下载
-- 文件列表：按类型筛选（PPT/Word/PDF）、按时间排序、分页
-- 文件搜索：按文件名模糊搜索
+- 文件列表：按类型/来源筛选、关键词搜索、分页、仅展示链尾版本
+- 文件预览：LibreOffice → PDFBox 渲染 PNG 页面预览（三级缓存）
 - 回收站：软删除 → 30 天自动清理（定时任务）
 - 文件恢复：从回收站恢复
 
@@ -246,16 +248,19 @@ CREATE TABLE `quota_log` (
 
 所有文件操作均在项目范围内，需传入 `project_id`。
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | /api/file/upload | 上传文件（Body 含 project_id） |
-| GET | /api/file/{id}/download | 下载文件 |
-| GET | /api/file/list | 文件列表（分页、类型筛选、排序；Query 含 project_id） |
-| GET | /api/file/search | 文件搜索（Query 含 project_id） |
-| DELETE | /api/file/{id} | 删除文件（移入回收站） |
-| PUT | /api/file/{id}/restore | 从回收站恢复 |
-| DELETE | /api/file/{id}/permanent | 永久删除 |
-| GET | /api/file/recycle | 回收站列表（Query 含 project_id） |
+| 方法     | 路径                       | 说明                                        |
+|--------|--------------------------|-------------------------------------------|
+| POST   | /api/file/upload         | 上传文件（Body 含 project_id）                   |
+| GET    | /api/file/{id}/download  | 下载文件                                      |
+| GET    | /api/file/list           | 文件列表（分页、类型/来源筛选、关键词搜索；Query 含 project_id） |
+| GET    | /api/file/{id}/preview   | 文件预览（返回每页 PNG 图片 URL + 布局标注） ⭐ v5.2       |
+| DELETE | /api/file/{id}           | 删除文件（移入回收站）                               |
+| PUT    | /api/file/{id}/restore   | 从回收站恢复                                    |
+| DELETE | /api/file/{id}/permanent | 永久删除                                      |
+| GET    | /api/file/recycle        | 回收站列表（Query 含 project_id）                 |
+
+> **v5.2 变更**：`list` 与 `search` 合并为单一 `/file/list` 接口，新增可选 `keyword` 和 `source` 参数。`source=1`
+> 显示用户上传（知识库视图），`source=2` 显示 AI 生成。
 
 ### 5.3 文件存储策略
 
@@ -275,7 +280,10 @@ CREATE TABLE `file_record` (
     `file_type` tinyint NOT NULL COMMENT '文件类型 1-PPT 2-Word 3-PDF 4-图片 5-其他',
     `file_size` bigint NOT NULL DEFAULT 0 COMMENT '文件大小（字节）',
     `file_url` varchar(500) NOT NULL COMMENT '存储路径或OSS URL',
+    `outline` MEDIUMTEXT NULL COMMENT '文档大纲 JSON（AI 回调回传）',              -- v5.2
+    `preview_pages` MEDIUMTEXT NULL COMMENT '预览页面缓存 JSON',                  -- v5.2
     `source` tinyint NOT NULL DEFAULT 1 COMMENT '来源 1-用户上传 2-AI生成',
+    `version_of` bigint NULL COMMENT '上一版本文件ID（修改链）',                   -- v5.2
     `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '回收站标记 0-正常 1-回收站',
     `deleted_at` datetime DEFAULT NULL COMMENT '移入回收站时间',
 
@@ -293,6 +301,34 @@ CREATE TABLE `file_record` (
     KEY `idx_deleted_at` (`deleted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文件记录表';
 ```
+
+#### 5.4.1 版本链机制（v5.2）
+
+每次对话修改生成新文件，通过 `version_of` 自引用形成单向链表：
+
+```
+A.version_of = NULL       （原始生成，链头）
+B.version_of = A.id       （第1轮修改）
+C.version_of = B.id       （第2轮修改）
+D.version_of = C.id       （第3轮修改，链尾）
+```
+
+文件列表只展示链尾文件（`id NOT IN (SELECT DISTINCT version_of FROM file_record WHERE version_of IS NOT NULL)`
+），旧版本自动隐藏。用户可在对话历史中回顾旧版本。
+
+#### 5.4.2 预览缓存（v5.2）
+
+`preview_pages` 字段存储预览页面 JSON：
+
+```json
+{"fileHash":"abc123","pages":[{"pageNumber":1,"imageUrl":"https://oss/.../page_001.png","layoutType":"cover","title":"..."}]}
+```
+
+三级缓存：Redis 热缓存（1h TTL）→ MySQL `preview_pages` → 重新渲染（LibreOffice → PDFBox 150 DPI PNG → OSS）。
+
+#### 5.4.3 RAG 去重（v5.2）
+
+仅 `source=1`（用户上传）的文件触发 RAG 向量入库，`source=2`（AI 生成）的文件跳过。AI 生成内容是参考素材的"输出成果"，入库是噪音。
 
 ---
 
@@ -374,40 +410,35 @@ Java 后端（本工程）                  AI 模块（另建工程）
                                       Redis 向量存储与检索
 ```
 
-### 7.2 AI 模块暴露的接口（前端直接调用）
+### 7.2 AI 模块暴露的接口
 
-所有生成与素材接口均需传入 `project_id`，用于限定 RAG 检索范围和素材归属。
+前端通过 Java 代理间接调用 Python。Java 端 `ChatController` + `AiModuleCaller` 负责 JWT 鉴权、日志记录和 RSA 签名转发。
 
-| 方法 | 路径 | 用途                                  |
-|------|------|-------------------------------------|
-| POST | /ai/chat/modify | 对话式修改文档（Body 含 project_id）          |
-| POST | /ai/material/upload | 上传素材并触发 RAG 摄取（Body 含 project_id）   |
-| GET | /ai/material/list | 查询项目素材列表（Query 含 project_id）       |
-| DELETE | /ai/material/{material_id} | 删除素材：Java 后端软删除 + Redis向量清理       |
+| 方法     | 路径                  | 用途             | 代理方式                                  |
+|--------|---------------------|----------------|---------------------------------------|
+| POST   | /ai/chat/modify     | 对话式修改文档        | ChatController → AiModuleCaller (RSA) |
+| POST   | /ai/chat/discuss    | 仅讨论/问答         | ChatController → AiModuleCaller (RSA) |
+| POST   | /ai/material/upload | 上传素材并触发 RAG 摄取 | 前端直调                                  |
+| DELETE | /ai/material/{id}   | 删除素材           | 前端直调                                  |
 
 ### 7.3 Java 后端暴露给 AI 模块的内部接口
 
 所有内部接口均通过 `/internal/*` 路径，使用 RSA 签名校验（`X-Timestamp` + `X-Nonce` + `X-Signature`）替代 JWT 鉴权。
 
-| 方法     | 路径                           | 用途                                                                   |
-|--------|------------------------------|----------------------------------------------------------------------|
-| POST   | /internal/quota/consume      | AI 生成前扣减额度                                                           |
-| POST   | /internal/quota/refund       | 生成失败退还额度                                                             |
-| POST   | /internal/file/upload        | AI 模块上传文件（素材 / 生成结果，Body 含 project_id）                               |
-| GET    | /internal/file/{id}/download | AI 模块下载文件（向量化等处理用）                                                   |
-| GET    | /internal/file/list          | AI 模块代理查询文件列表（Query 含 project_id）                                    |
-| DELETE | /internal/file/{id}          | AI 模块软删除文件，移入回收站（Query 含 userId）                                     |
-| POST   | /internal/task/callback      | 接收文档生成任务完成/失败回调                                                      |
-| POST   | /internal/task/progress      | 接收文档生成任务进度通知（可选）                                                     |
-| POST   | /internal/api-key/fetch      | AI 模块获取解密后的 LLM API Key（启动时用于 embedding 模型初始化，生成时凭证已由 RabbitMQ 消息传递） |
-
-### 7.4 Java 后端调用 AI 模块的内部接口
-
-当项目被删除时，Java 后端需通知 AI 模块清理该项目下的所有向量数据。
-
-| 方法 | 路径 | 用途 |
-|------|------|------|
-| POST | /ai/internal/project/delete | 通知 AI 模块清理指定项目的 Redis 向量数据（Body 含 project_id） |
+| 方法     | 路径                                   | 用途                             |
+|--------|--------------------------------------|--------------------------------|
+| POST   | /internal/quota/consume              | AI 生成前扣减额度                     |
+| POST   | /internal/quota/refund               | 生成失败退还额度                       |
+| POST   | /internal/file/upload                | AI 模块上传文件（含 versionOf 版本链）     |
+| GET    | /internal/file/{id}/download         | AI 模块下载文件                      |
+| DELETE | /internal/file/{id}                  | AI 模块软删除文件                     |
+| POST   | /internal/task/callback              | 任务完成/失败回调（含 outline 大纲） ⭐ v5.2 |
+| POST   | /internal/task/progress              | 任务进度通知                         |
+| GET    | /internal/file/{id}/outline          | 读取文档大纲 ⭐ v5.2                  |
+| PUT    | /internal/file/{id}/outline          | 更新文档大纲 ⭐ v5.2                  |
+| POST   | /internal/chat/session               | 获取或创建对话会话 ⭐ v5.2               |
+| POST   | /internal/chat/session/{id}/messages | 追加对话消息 ⭐ v5.2                  |
+| POST   | /internal/api-key/fetch              | 获取解密后的 LLM API Key             |
 
 ### 7.5 调用链
 
@@ -461,6 +492,34 @@ Python AI 模块（消费者）:
      → AI模块调用Java后端(/internal/file/{id}) 软删除文件（移入回收站）
      → AI模块清理 Redis 中对应 material_id 的向量数据
      → AI模块返回删除结果
+```
+
+#### 对话修改（v5.2 新增）
+
+```
+前端 → POST /chat/modify (JWT Token)
+     → ChatController: 鉴权 + 注入 userId + 记录日志
+     → AiModuleCaller.chatModify(): RSA-SHA256 签名
+     → Python POST /ai/chat/modify
+     → Python 编排:
+         GET /internal/file/{id}/outline         (获取大纲)
+         POST /internal/chat/session            (获取/创建会话)
+         LLM 修改大纲 → Generator 重建文件
+         POST /internal/file/upload?versionOf=X  (上传新文件,建立版本链)
+         PUT /internal/file/{id}/outline         (更新大纲)
+         POST /internal/chat/session/{id}/messages (追加消息)
+     → Python 返回响应 → ChatController → BaseResponse.success → 前端
+```
+
+#### 文件预览（v5.2 新增）
+
+```
+前端 → GET /file/{id}/preview (JWT Token)
+     → PreviewService:
+         ① Redis 热缓存 (preview:{fileId}, TTL 1h) → fileHash 校验
+         ② MySQL file_record.preview_pages → fileHash 校验
+         ③ 重新渲染: LibreOffice 无头 → PDF → PDFBox 150DPI PNG → OSS
+     → 返回 {fileId, totalPages, pages[{pageNumber, imageUrl, layoutType, title}]}
 ```
 
 #### 项目删除（级联清理）
@@ -740,19 +799,59 @@ src/main/java/com/greendam/birdhelp/
 - [x] 用户模块（注册、登录、个人信息）
 
 ### 第二阶段：核心业务
-- [x] 额度模块（查询、扣减、退还、惰性跨天重置）
-- [x] 文件模块（上传、下载、列表、搜索、回收站、定时清理）
-- [x] 项目模块（创建、删除、编辑、列表、归档/激活，级联清理通知）
-- [x] AI 生成代理接口 — PPT 生成（`POST /ppt/generate` → `/ai/ppt/generate`）
-- [x] AI 生成代理接口 — Word 生成（`POST /word/generate` → `/ai/word/generate`）
-- [x] AI 生成代理接口 — PDF 生成（`POST /pdf/generate` → `/ai/pdf/generate`）
-- [x] AI 素材管理代理接口 — 上传/删除/重建索引/清理向量（`/ai/material/**`）
-- [x] 内部接口签名验证（`/api/internal/**` 的 RSA 验签过滤器 SignFilter）
-- [x] 文档生成异步化（RabbitMQ 消息投递、TaskInternalController 回调、SignFilter 覆盖 /internal/task/*）
-- [x] RabbitMQ 拓扑搭建（Exchange birdhelp.doc.generation、Queue birdhelp.doc.generation.tasks、DLX/DLQ）
-- [x] 管理员后台（登录、用户管理、额度管理、API Key 管理、操作日志、看板、项目/文件/任务管理）
-- [x] 系统公告模块（管理员 CRUD + 用户端查询）
-- [x] LLM API Key 管理（AES 加密存储 + Python 内部接口获取）
+
+- [x] 额度模块
+- [x] 文件模块（上传、下载、列表/搜索合并、预览、回收站、定时清理）
+- [x] 项目模块
+- [x] AI 生成代理接口 — PPT/Word/PDF（RabbitMQ 异步）
+- [x] AI 素材管理代理接口
+- [x] 内部接口签名验证（SignFilter）
+- [x] 文档生成异步化（RabbitMQ + TaskInternalController）
+- [x] 管理员后台
+- [x] 系统公告模块
+- [x] LLM API Key 管理
+- [x] 对话修改代理（ChatController + AiModuleCaller → Python /ai/chat/*） ⭐ v5.2
+- [x] 文件预览（PreviewService: LibreOffice → PDFBox → OSS，三级缓存） ⭐ v5.2
+- [x] 大纲管理（TaskInternalController 回调写 outline，ChatInternalController 读写） ⭐ v5.2
+- [x] 会话存储（chat_session + chat_message 表，ChatSessionService） ⭐ v5.2
+- [x] 版本链 + 知识库视图 + RAG 过滤 ⭐ v5.2
 
 ### 第三阶段：商业化
 - [ ] 会员模块（套餐、订单、支付回调）
+
+---
+
+## 十五、会话与消息表（v5.2 新增）
+
+```sql
+CREATE TABLE `chat_session`
+(
+    `id`               bigint      NOT NULL AUTO_INCREMENT,
+    `session_id`       varchar(64) NOT NULL COMMENT '会话ID（UUID v4）',
+    `user_id`          bigint      NOT NULL,
+    `project_id`       bigint      NOT NULL,
+    `original_file_id` bigint      NOT NULL COMMENT '修改的起点文件ID',
+    `current_file_id`  bigint               DEFAULT NULL COMMENT '当前最新版本文件ID',
+    `doc_type`         varchar(10) NOT NULL COMMENT 'ppt/word/pdf',
+    `message_count`    int         NOT NULL DEFAULT 0,
+    `create_time`      datetime    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`      datetime    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `del_flag`         tinyint              DEFAULT 0,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_session_id` (`session_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4 COMMENT ='对话修改会话表';
+
+CREATE TABLE `chat_message`
+(
+    `id`          bigint      NOT NULL AUTO_INCREMENT,
+    `session_id`  varchar(64) NOT NULL COMMENT '关联 chat_session.session_id',
+    `role`        varchar(16) NOT NULL COMMENT 'user / assistant',
+    `content`     TEXT        NOT NULL COMMENT '消息内容',
+    `file_id`     bigint               DEFAULT NULL COMMENT '关联的文件ID（assistant消息可选）',
+    `create_time` datetime    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_session_time` (`session_id`, `create_time`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4 COMMENT ='对话消息明细表';
+```

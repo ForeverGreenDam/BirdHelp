@@ -86,15 +86,15 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
     @Override
     public FileRecordVO upload(MultipartFile file, Long projectId, Long userId) {
         try {
-            return doUpload(file.getBytes(), file.getOriginalFilename(), projectId, userId, 1);
+            return doUpload(file.getBytes(), file.getOriginalFilename(), projectId, userId, 1, null);
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "文件读取失败");
         }
     }
 
     @Override
-    public FileRecordVO uploadByAi(byte[] content, String fileName, Long projectId, Long userId) {
-        return doUpload(content, fileName, projectId, userId, 2);
+    public FileRecordVO uploadByAi(byte[] content, String fileName, Long projectId, Long userId, Long versionOf) {
+        return doUpload(content, fileName, projectId, userId, 2, versionOf);
     }
 
     @Override
@@ -107,25 +107,18 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
     }
 
     @Override
-    public Page<FileRecordVO> listFiles(int page, int size, Integer fileType, Long projectId, Long userId) {
+    public Page<FileRecordVO> listFiles(int page, int size, Integer fileType, Integer source,
+                                        String keyword, Long projectId, Long userId) {
+        // 只展示链尾文件 + 可选筛选 + 可选关键词搜索
         LambdaQueryWrapper<FileRecord> wrapper = new LambdaQueryWrapper<FileRecord>()
                 .eq(FileRecord::getUserId, userId)
                 .eq(FileRecord::getProjectId, projectId)
                 .eq(FileRecord::getDeleted, 0)
                 .eq(fileType != null, FileRecord::getFileType, fileType)
-                .orderByDesc(FileRecord::getCreateTime);
-
-        Page<FileRecord> resultPage = page(new Page<>(page, size), wrapper);
-        return convertPage(resultPage);
-    }
-
-    @Override
-    public Page<FileRecordVO> searchFiles(String keyword, int page, int size, Long projectId, Long userId) {
-        LambdaQueryWrapper<FileRecord> wrapper = new LambdaQueryWrapper<FileRecord>()
-                .eq(FileRecord::getUserId, userId)
-                .eq(FileRecord::getProjectId, projectId)
-                .eq(FileRecord::getDeleted, 0)
-                .like(FileRecord::getFileName, keyword)
+                .eq(source != null, FileRecord::getSource, source)
+                .like(keyword != null && !keyword.isEmpty(), FileRecord::getFileName, keyword)
+                .notInSql(FileRecord::getId,
+                        "SELECT DISTINCT version_of FROM file_record WHERE version_of IS NOT NULL AND deleted = 0")
                 .orderByDesc(FileRecord::getCreateTime);
 
         Page<FileRecord> resultPage = page(new Page<>(page, size), wrapper);
@@ -195,8 +188,10 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
 
     /**
      * 核心上传逻辑：保存文件到存储 → 插入数据库记录。
+     *
+     * @param versionOf 上一版本文件 ID（修改链，可选），{@code null} 表示原始生成或独立文件
      */
-    private FileRecordVO doUpload(byte[] content, String originalName, Long projectId, Long userId, int source) {
+    private FileRecordVO doUpload(byte[] content, String originalName, Long projectId, Long userId, int source, Long versionOf) {
         String ext = extractExt(originalName);
         int fileType = resolveFileType(ext);
         String objectName = buildObjectName(projectId, fileType, ext);
@@ -211,16 +206,21 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
         record.setFileSize((long) content.length);
         record.setFileUrl(fileUrl);
         record.setSource(source);
+        record.setVersionOf(versionOf);
         record.setDeleted(0);
         save(record);
 
         projectService.incrementFileCount(projectId);
 
-        log.info("文件上传成功: id={}, projectId={}, fileName={}, fileType={}, source={}",
-                record.getId(), projectId, originalName, fileType, source);
+        log.info("文件上传成功: id={}, projectId={}, fileName={}, fileType={}, source={}, versionOf={}",
+                record.getId(), projectId, originalName, fileType, source, versionOf);
 
-        // 通知 AI 模块上传素材并触发 RAG 摄取
-        aiModuleCaller.uploadMaterial(content, originalName, userId, projectId, record.getId());
+        // RAG 去重：仅 source=1（用户上传）的文件才入库向量库，AI 生成的文件跳过
+        if (source == 1) {
+            aiModuleCaller.uploadMaterial(content, originalName, userId, projectId, record.getId());
+        } else {
+            log.info("AI 生成文件跳过 RAG 入库: fileId={}, source={}", record.getId(), source);
+        }
 
         return toVO(record);
     }
@@ -276,6 +276,8 @@ public class FileServiceImpl extends ServiceImpl<FileRecordMapper, FileRecord>
                 .fileType(record.getFileType())
                 .fileSize(record.getFileSize())
                 .source(record.getSource())
+                .outline(record.getOutline())
+                .versionOf(record.getVersionOf())
                 .deleted(record.getDeleted())
                 .deletedAt(record.getDeletedAt())
                 .createTime(record.getCreateTime())

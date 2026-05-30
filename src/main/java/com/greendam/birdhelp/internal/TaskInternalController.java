@@ -1,8 +1,10 @@
 package com.greendam.birdhelp.internal;
 
 import com.greendam.birdhelp.common.BaseResponse;
+import com.greendam.birdhelp.mapper.FileRecordMapper;
 import com.greendam.birdhelp.model.dto.TaskCallbackRequest;
 import com.greendam.birdhelp.model.dto.TaskProgressRequest;
+import com.greendam.birdhelp.model.entity.FileRecord;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,8 +25,12 @@ public class TaskInternalController {
 
     private static final String TASK_PREFIX = "task:";
     private static final long TASK_TTL_HOURS = 24;
+
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private FileRecordMapper fileRecordMapper;
 
     /**
      * 接收任务完成/失败回调（协议 4.1 / 4.2）。
@@ -52,6 +58,18 @@ public class TaskInternalController {
                 stringRedisTemplate.opsForValue().set(key + ":qaTotalCount", String.valueOf(req.getQaTotalCount()), TASK_TTL_HOURS, TimeUnit.HOURS);
             }
             log.info("任务完成: taskId={}, fileId={}, fileUrl={}", taskId, req.getFileId(), req.getFileUrl());
+
+            // 将 AI 模块回传的 outline 写入 file_record，用于后续对话修改和预览布局标注
+            if (req.getFileId() != null && req.getOutline() != null && !req.getOutline().isEmpty()) {
+                FileRecord record = fileRecordMapper.selectById(req.getFileId());
+                if (record != null) {
+                    record.setOutline(req.getOutline());
+                    fileRecordMapper.updateById(record);
+                    log.info("大纲已写入 DB: fileId={}, outlineLength={}", req.getFileId(), req.getOutline().length());
+                } else {
+                    log.warn("大纲写入失败，文件记录不存在: fileId={}", req.getFileId());
+                }
+            }
         } else {
             stringRedisTemplate.opsForValue().set(key + ":status", "failed", TASK_TTL_HOURS, TimeUnit.HOURS);
             stringRedisTemplate.opsForValue().set(key + ":errorCode", String.valueOf(req.getErrorCode()), TASK_TTL_HOURS, TimeUnit.HOURS);

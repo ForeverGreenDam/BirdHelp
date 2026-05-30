@@ -16,12 +16,12 @@
 token: {JWT Token}
 ```
 
-| 模块                                  | 是否需要 Token  |
-|-------------------------------------|:-----------:|
-| 注册、登录、发送验证码、重置密码                    |      否      |
-| 用户信息、项目管理、文件管理、PPT/Word/PDF 生成、额度查询 |      是      |
-| 管理员后台所有接口                           | Admin Token |
-| 用户端公告查询                             |      否      |
+| 模块                                       | 是否需要 Token  |
+|------------------------------------------|:-----------:|
+| 注册、登录、发送验证码、重置密码                         |      否      |
+| 用户信息、项目管理、文件管理、PPT/Word/PDF 生成、对话修改、额度查询 |      是      |
+| 管理员后台所有接口                                | Admin Token |
+| 用户端公告查询                                  |      否      |
 
 管理员登录成功后，客户端需使用返回的 token，在后续请求头中携带：
 
@@ -329,6 +329,9 @@ POST /file/upload
     "fileType": 3,
     "fileSize": 1024000,
     "source": 1,
+    "fileUrl": "https://oss.example.com/...",
+    "outline": null,
+    "versionOf": null,
     "deleted": 0,
     "deletedAt": null,
     "createTime": "2026-05-16T11:00:00"
@@ -344,31 +347,96 @@ POST /file/upload
 |    4     | 图片   |
 |    5     | 其他   |
 
-### 4.2 文件列表
+| source | 含义          |
+|:------:|-------------|
+|   1    | 用户上传（知识库素材） |
+|   2    | AI 生成       |
+
+### 4.2 文件列表（含搜索）
 
 ```
-GET /file/list?projectId=1&page=1&size=10&fileType=3
+GET /file/list?projectId=1&page=1&size=10&fileType=3&source=1&keyword=课件
 ```
 
-| 参数          | 类型   | 必填 | 说明         |
-|-------------|------|:--:|------------|
-| `projectId` | long | 是  | 项目 ID      |
-| `page`      | int  | 否  | 页码，默认 1    |
-| `size`      | int  | 否  | 每页条数，默认 10 |
-| `fileType`  | int  | 否  | 筛选文件类型     |
+| 参数          | 类型     | 必填 | 说明                                    |
+|-------------|--------|:--:|---------------------------------------|
+| `projectId` | long   | 是  | 项目 ID                                 |
+| `page`      | int    | 否  | 页码，默认 1                               |
+| `size`      | int    | 否  | 每页条数，默认 10                            |
+| `fileType`  | int    | 否  | 筛选文件类型：1-PPT 2-Word 3-PDF 4-图片 5-其他   |
+| `source`    | int    | 否  | 筛选文件来源：**1-用户上传（知识库）** 2-AI生成。不传则显示全部 |
+| `keyword`   | string | 否  | 搜索关键词，按文件名模糊匹配。不传或为空则不做文件名过滤          |
 
-### 4.3 搜索文件
+> **注意**：`search` 端点已与 `list` 合并，直接使用 `list` 传 `keyword` 参数即可。
+
+**列表自动隐藏旧版本：** AI 修改文档后会生成新文件，旧版本通过 `versionOf`
+字段形成版本链。列表只展示链尾文件（最新版），旧版本自动隐藏。用户可在对话窗口的历史消息中回顾旧版本。
+
+**知识库使用场景：**
+
+| 页面    | 调用方式                                             | 说明           |
+|-------|--------------------------------------------------|--------------|
+| 全部文件  | `GET /file/list?projectId=1`                     | 显示该项目下所有链尾文件 |
+| 知识库   | `GET /file/list?projectId=1&source=1`            | 只显示用户上传的原始素材 |
+| AI 生成 | `GET /file/list?projectId=1&source=2`            | 只显示 AI 生成的文件 |
+| 搜索知识库 | `GET /file/list?projectId=1&source=1&keyword=报告` | 在素材中搜索       |
+| 按类型筛选 | `GET /file/list?projectId=1&fileType=1&source=1` | 只看 PPT 素材    |
+
+响应 `BaseResponse<Page<FileRecordVO>>`（分页格式见 §十八）。
+
+### 4.3 文件预览
 
 ```
-GET /file/search?projectId=1&keyword=课件&page=1&size=10
+GET /file/{id}/preview
 ```
 
-| 参数          | 类型     | 必填 | 说明    |
-|-------------|--------|:--:|-------|
-| `projectId` | long   | 是  | 项目 ID |
-| `keyword`   | string | 是  | 搜索关键词 |
-| `page`      | int    | 否  | 页码    |
-| `size`      | int    | 否  | 每页条数  |
+获取文件的预览图片。采用三级缓存策略：Redis（1h）→ MySQL → 重新渲染。
+
+渲染管道：LibreOffice 无头模式转 PDF → PDFBox 逐页渲染 150 DPI PNG → 上传 OSS。
+
+每页会标注 `layoutType`（布局类型）和 `title`（页面标题），来自文档生成时记录的大纲 JSON。
+
+**使用场景：** 文件列表中点击文件卡片时调用，展示文件缩略图预览；对话修改页面中展示当前编辑文档的预览。
+
+响应 `BaseResponse<PreviewVO>`：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "fileId": "42",
+    "fileHash": "abc123def456",
+    "totalPages": 12,
+    "pages": [
+      {
+        "pageNumber": 1,
+        "imageUrl": "https://oss.example.com/preview/1/42/page_001.png",
+        "layoutType": "cover",
+        "title": "Java基础语法教学"
+      },
+      {
+        "pageNumber": 2,
+        "imageUrl": "https://oss.example.com/preview/1/42/page_002.png",
+        "layoutType": "text_only",
+        "title": "课程目标"
+      }
+    ]
+  }
+}
+```
+
+| 字段           | 类型     | 说明                          |
+|--------------|--------|-----------------------------|
+| `fileId`     | string | 文件 ID                       |
+| `fileHash`   | string | 文件哈希，用于缓存校验                 |
+| `totalPages` | int    | 总页数                         |
+| `pages`      | array  | 每页预览数据                      |
+| `pageNumber` | int    | 页码（从 1 开始）                  |
+| `imageUrl`   | string | 预览 PNG 图片 URL（OSS）          |
+| `layoutType` | string | 页面布局类型（如 cover/text_only 等） |
+| `title`      | string | 页面标题                        |
+
+> **首次预览可能较慢**（需 LibreOffice 转换 + PDFBox 渲染），后续命中缓存后秒级返回。
 
 ### 4.4 下载文件
 
@@ -1390,7 +1458,184 @@ GET /announcement/active
 
 ---
 
-## 十七、通用错误码
+## 十七、对话修改模块 — `/chat`
+
+> 需 Token。**代理接口**，Java 后端接收请求后通过 RSA 签名代理转发至 Python AI 模块执行。
+
+对话修改分为两种模式：
+
+| 接口                   | 用途     | 重建文件 | 典型场景                              |
+|----------------------|--------|:----:|-----------------------------------|
+| `POST /chat/modify`  | 对话修改文档 |  ✅   | 用户说"把第二页标题改激进些" → AI 修改大纲 → 生成新文件 |
+| `POST /chat/discuss` | 仅讨论/问答 |  ❌   | 用户说"这篇文档的第一页有什么问题？" → AI 给出文字建议   |
+
+### 17.1 对话修改文档
+
+```
+POST /chat/modify
+```
+
+**使用场景：** 用户在文档详情页点击"对话修改"，进入聊天窗口。每轮对话可修改文档（改文字、增删页、调顺序、换布局），修改后自动生成新版本文件。会话
+ID 由前端生成（UUID v4），贯穿整个修改对话。
+
+| 参数               | 类型     | 必填 | 默认值    | 说明                                                         |
+|------------------|--------|:--:|--------|------------------------------------------------------------|
+| `sessionId`      | string | 是  | —      | 会话 ID（UUID v4），同一修改对话的唯一标识                                 |
+| `fileId`         | string | 是  | —      | 当前编辑的源文件 ID                                                |
+| `docType`        | string | 是  | —      | 文档类型：`"ppt"` / `"word"` / `"pdf"`                          |
+| `message`        | string | 是  | —      | 用户当前的修改指令                                                  |
+| `projectId`      | long   | 是  | —      | 所属项目 ID                                                    |
+| `history`        | array  | 否  | `[]`   | 历史消息列表，前端维护。每项：`{"role":"user/assistant","content":"..."}` |
+| `regenerateFile` | bool   | 否  | `true` | 是否重建文件。`false` 时只返回 AI 文本回复，不生成新文件                         |
+
+```json
+{
+  "sessionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "fileId": "100",
+  "docType": "ppt",
+  "message": "把第二页标题改得激进一些，并把第三页和第四页顺序对调",
+  "projectId": 1,
+  "history": [
+    {
+      "role": "user",
+      "content": "帮我看看这篇PPT"
+    },
+    {
+      "role": "assistant",
+      "content": "这是一篇关于Java基础语法的PPT，共10页..."
+    }
+  ],
+  "regenerateFile": true
+}
+```
+
+响应 `BaseResponse<Map>`：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "sessionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "reply": "已根据您的指令修改文档大纲（3 处变更）。",
+    "outline": {
+      "title": "Java基础语法教学",
+      "doc_type": "ppt",
+      "slides": [
+        {
+          "page_number": 1,
+          "title": "封面",
+          "layout_type": "cover",
+          ...
+        },
+        {
+          "page_number": 2,
+          "title": "激进版课程目标",
+          "layout_type": "text_only",
+          ...
+        }
+      ]
+    },
+    "changes": [
+      {
+        "page_number": 2,
+        "action": "modified",
+        "summary": "标题: \"课程目标\" → \"激进版课程目标\""
+      },
+      {
+        "page_number": 3,
+        "action": "modified",
+        "summary": "与第4页对调顺序"
+      },
+      {
+        "page_number": 4,
+        "action": "modified",
+        "summary": "与第3页对调顺序"
+      }
+    ],
+    "fileId": "101",
+    "fileUrl": "https://oss.example.com/1/ppt/2026-05/uuid.pptx",
+    "success": true
+  }
+}
+```
+
+| 字段        | 类型     | 说明                                                                             |
+|-----------|--------|--------------------------------------------------------------------------------|
+| `reply`   | string | AI 文本回复，可直接展示在聊天界面                                                             |
+| `outline` | object | 修改后的完整文档大纲 JSON。可用于前端展示大纲树或高亮变更                                                |
+| `changes` | array  | 变更摘要列表，每项含 `page_number`（页码）、`action`（modified/added/deleted）、`summary`（一句话描述） |
+| `fileId`  | string | 新生成的文件 ID。`regenerateFile=false` 时为 `null`                                     |
+| `fileUrl` | string | 新文件的 OSS URL                                                                   |
+| `success` | bool   | 是否成功                                                                           |
+
+**前端流程：**
+
+```
+1. 用户在文件详情页点击"对话修改"
+2. 前端生成 sessionId = UUID v4
+3. 发送第一条 modify 请求（history=[]）
+4. 收到响应：
+   a. 在聊天区展示 reply 文本
+   b. 如果 fileId 不为空 → 新文件生成，更新预览区为新文件
+   c. 在变更面板展示 changes 列表（标注哪些页被修改/新增/删除）
+   d. 将 {role:"user", content: message} 和 {role:"assistant", content: reply} 追加到本地 history
+5. 用户继续输入 → 发送下一条 modify 请求（携带累积的 history）
+```
+
+**修改能力覆盖：**
+
+| 修改类型      | PPT | Word | PDF |
+|-----------|:---:|:----:|:---:|
+| 修改标题/正文   |  ✅  |  ✅   |  ❌  |
+| 增删页面/章节   |  ✅  |  ✅   |  ❌  |
+| 调整顺序      |  ✅  |  ✅   |  ❌  |
+| 切换布局类型    |  ✅  |  —   |  —  |
+| 修改图表/表格数据 |  ✅  |  ✅   |  ❌  |
+| 改变整体风格/配色 |  ✅  |  ✅   |  ❌  |
+| 仅讨论/给建议   |  ✅  |  ✅   |  ✅  |
+
+### 17.2 仅讨论/问答
+
+```
+POST /chat/discuss
+```
+
+**使用场景：** 用户想先听听 AI 的建议，不着急生成新文件。例如"这篇文档结构有什么问题？"、"第一页还能怎么优化？"。
+
+参数与 `/chat/modify` 相同，但 **不需要 `regenerateFile` 字段**（内部固定为 `false`）。
+
+```json
+{
+  "sessionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "fileId": "100",
+  "docType": "ppt",
+  "message": "这篇文档的第一页标题有什么问题？给些优化建议",
+  "projectId": 1,
+  "history": []
+}
+```
+
+响应结构与 `/chat/modify` 相同，但 `fileId` 和 `fileUrl` 固定为 `null`，`changes` 为空数组。
+
+### 17.3 版本链与文件回顾
+
+每次 `/chat/modify` 成功后返回的 `fileId` 是新版本文件。旧版本文件自动在文件列表中隐藏（通过 `versionOf`链表机制），但可通过会话历史消息中的
+`fileId` 回顾。
+
+```
+文件 A (versionOf=null)  ← 原始生成
+    ↓ B.versionOf = A.id
+文件 B                   ← 第1轮修改
+    ↓ C.versionOf = B.id  
+文件 C                   ← 第2轮修改（链尾，列表可见）
+```
+
+> 前端可在聊天区的每条 assistant 消息旁展示对应版本的文件预览链接。
+
+---
+
+## 十八、通用错误码
 
 |  code   | 说明             |
 |:-------:|----------------|
@@ -1420,7 +1665,7 @@ GET /announcement/active
 
 ---
 
-## 十八、分页响应格式
+## 十九、分页响应格式
 
 所有列表接口返回统一分页结构：
 
