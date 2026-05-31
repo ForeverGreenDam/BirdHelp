@@ -1460,23 +1460,146 @@ GET /announcement/active
 
 ## 十七、对话修改模块 — `/chat`
 
-> 需 Token。**代理接口**，Java 后端接收请求后通过 RSA 签名代理转发至 Python AI 模块执行。
+> 需 Token。左侧栏展示全局会话列表，点击标签进入具体会话后多轮对话修改。
 
-对话修改分为两种模式：
+```
+┌─ 左侧栏 ───────────┬── 右侧主区域 ──────────────┐
+│ + 新建对话          │                            │
+│                    │   选中某个会话后：            │
+│ ▸ Java课件制作      │   - 聊天消息列表             │
+│   大二课件 · 12条    │   - 版本时间线              │
+│                    │   - 当前文件预览             │
+│ ▸ 英语论文修改       │                            │
+│   大三论文 · 5条     │   未选中时：                  │
+│                    │   - 文件选择器（新建对话）     │
+│ ▸ 语文PPT优化       │                            │
+│   语文课 · 3条      │                            │
+└────────────────────┴────────────────────────────┘
+```
 
-| 接口                   | 用途     | 重建文件 | 典型场景                              |
-|----------------------|--------|:----:|-----------------------------------|
-| `POST /chat/modify`  | 对话修改文档 |  ✅   | 用户说"把第二页标题改激进些" → AI 修改大纲 → 生成新文件 |
-| `POST /chat/discuss` | 仅讨论/问答 |  ❌   | 用户说"这篇文档的第一页有什么问题？" → AI 给出文字建议   |
+### 17.1 创建新会话
 
-### 17.1 对话修改文档
+```
+POST /chat/session
+```
+
+**使用场景：** 用户点击「新建对话」→ 选择文件 → 调用此接口创建空会话，拿到 `sessionId` 后用于后续对话。Java 端生成
+UUID，前端无需自行生成。
+
+| 参数          | 类型     | 必填 | 说明                     |
+|-------------|--------|:--:|------------------------|
+| `fileId`    | string | 是  | 选中的源文件 ID              |
+| `docType`   | string | 是  | `ppt` / `word` / `pdf` |
+| `projectId` | long   | 是  | 所属项目 ID                |
+| `title`     | string | 否  | 自定义标题，不传则取原始文件名去扩展名    |
+
+```json
+{ "fileId": "100", "docType": "ppt", "projectId": 1 }
+```
+
+响应：
+
+```json
+{ "code": 0, "data": { "sessionId": "uuid-v4", "title": "课件素材" } }
+```
+
+### 17.2 会话列表（左侧栏全局）
+
+```
+GET /chat/sessions
+```
+
+**使用场景：** 页面加载时调用，渲染左侧栏。返回该用户所有会话（不限项目），按最后更新时间倒序。无需传任何参数（用户 ID 从 JWT
+获取）。
+
+响应 `BaseResponse<List<ChatSessionVO>>`：
+
+```json
+{
+  "code": 0,
+  "data": [
+    {
+      "sessionId": "a1b2c3d4-...",
+      "title": "Java课件制作",
+      "projectId": "1",
+      "originalFileId": "100",
+      "currentFileId": "105",
+      "originalFileName": "课件素材.pptx",
+      "docType": "ppt",
+      "messageCount": 12,
+      "lastMessagePreview": "已修改第二页标题，从「课程目标」改为「...",
+      "createTime": "2026-05-30T10:00:00",
+      "updateTime": "2026-05-31T14:30:00"
+    }
+  ]
+}
+```
+
+### 17.3 会话详情（点击标签加载历史）
+
+```
+GET /chat/session/{sessionId}
+```
+
+**使用场景：** 用户点击左侧标签 → 恢复完整聊天界面，包括历史消息和当前文件信息。
+
+响应 `BaseResponse<ChatSessionDetailVO>`：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "sessionId": "a1b2c3d4-...",
+    "title": "Java课件制作",
+    "originalFileId": "100",
+    "currentFileId": "105",
+    "originalFileName": "课件素材.pptx",
+    "docType": "ppt",
+    "createTime": "2026-05-30T10:00:00",
+    "updateTime": "2026-05-31T14:30:00",
+    "messages": [
+      {"id": "1", "role": "user", "content": "把第二页标题改激进些", "fileId": null, "createTime": "..."},
+      {"id": "2", "role": "assistant", "content": "已修改第二页...", "fileId": "101", "createTime": "..."},
+      {"id": "3", "role": "user", "content": "第三第四页对调", "fileId": null, "createTime": "..."},
+      {"id": "4", "role": "assistant", "content": "已对调...", "fileId": "102", "createTime": "..."}
+    ]
+  }
+}
+```
+
+**版本时间线：** 前端遍历 messages，收集 `role=assistant` 且 `fileId` 非空的条目即可。
+
+### 17.4 前端完整流程
+
+```
+1. 页面加载 → GET /chat/sessions → 渲染左侧栏
+2. 点击「新建对话」→ 弹出文件选择器（调 /file/list）→ 选文件
+3. POST /chat/session({fileId, docType, projectId}) → 拿到 sessionId
+4. 左侧栏即时更新（前端本地插入新标签，或重新拉 /chat/sessions）
+5. 用户输入消息 → POST /chat/modify({sessionId, fileId, docType, message, projectId, history:[]})
+6. 点击左侧已有标签 → GET /chat/session/{sessionId} → 恢复全部历史
+7. 继续对话 → POST /chat/modify（复用同一个 sessionId，history 从本地 state 取）
+8. 删除会话 → DELETE /chat/session/{sessionId} → 左侧栏移除该标签
+```
+
+### 17.5 删除会话
+
+```
+DELETE /chat/session/{sessionId}
+```
+
+**使用场景：** 用户在左侧栏右键（或长按）会话标签 → 删除。软删除，仅隐藏会话及其历史，不删除关联的任何文件。
+
+无请求体，无响应 data。删除后左侧栏重新拉取即可。
+
+### 17.6 对话修改文档
 
 ```
 POST /chat/modify
 ```
 
-**使用场景：** 用户在文档详情页点击"对话修改"，进入聊天窗口。每轮对话可修改文档（改文字、增删页、调顺序、换布局），修改后自动生成新版本文件。会话
-ID 由前端生成（UUID v4），贯穿整个修改对话。
+**使用场景：** 用户在聊天窗口发送修改指令。每轮对话可修改文档（改文字、增删页、调顺序、换布局），修改后自动生成新版本文件。
+`sessionId` 须为 `POST /chat/session` 返回的值（Java 生成），不能前端自行生成。
 
 | 参数               | 类型     | 必填 | 默认值    | 说明                                                         |
 |------------------|--------|:--:|--------|------------------------------------------------------------|
@@ -1555,10 +1678,14 @@ ID 由前端生成（UUID v4），贯穿整个修改对话。
     ],
     "fileId": "101",
     "fileUrl": "https://oss.example.com/1/ppt/2026-05/uuid.pptx",
+    "title": "Java课件标题优化",
     "success": true
   }
 }
 ```
+
+> **`title` 字段**：仅在首轮对话（`history` 为空）时返回，由 LLM 根据大纲和用户首条消息自动生成。Java 端自动回填到
+`chat_session.title`，前端可用于即时更新左侧栏标签。
 
 | 字段        | 类型     | 说明                                                                             |
 |-----------|--------|--------------------------------------------------------------------------------|
@@ -1567,20 +1694,20 @@ ID 由前端生成（UUID v4），贯穿整个修改对话。
 | `changes` | array  | 变更摘要列表，每项含 `page_number`（页码）、`action`（modified/added/deleted）、`summary`（一句话描述） |
 | `fileId`  | string | 新生成的文件 ID。`regenerateFile=false` 时为 `null`                                     |
 | `fileUrl` | string | 新文件的 OSS URL                                                                   |
+| `title`   | string | LLM 生成的会话标题（首轮对话返回，后续为空），前端用于更新左侧栏标签                                           |
 | `success` | bool   | 是否成功                                                                           |
 
-**前端流程：**
+**单次 modify 调用后的前端处理：**
 
 ```
-1. 用户在文件详情页点击"对话修改"
-2. 前端生成 sessionId = UUID v4
-3. 发送第一条 modify 请求（history=[]）
-4. 收到响应：
+1. 发送 POST /chat/modify（sessionId 来自 POST /chat/session 的返回值）
+2. 收到响应：
    a. 在聊天区展示 reply 文本
-   b. 如果 fileId 不为空 → 新文件生成，更新预览区为新文件
-   c. 在变更面板展示 changes 列表（标注哪些页被修改/新增/删除）
-   d. 将 {role:"user", content: message} 和 {role:"assistant", content: reply} 追加到本地 history
-5. 用户继续输入 → 发送下一条 modify 请求（携带累积的 history）
+   b. 如果 fileId 不为空 → 更新预览区为新文件
+   c. 在变更面板展示 changes 列表
+   d. 如果 title 非空 → 更新左侧栏标签标题
+   e. 将 user 消息和 assistant 回复追加到本地 history
+3. 用户继续输入 → 发送下一条 modify（复用 sessionId，携带累积 history）
 ```
 
 **修改能力覆盖：**
@@ -1595,7 +1722,7 @@ ID 由前端生成（UUID v4），贯穿整个修改对话。
 | 改变整体风格/配色 |  ✅  |  ✅   |  ❌  |
 | 仅讨论/给建议   |  ✅  |  ✅   |  ✅  |
 
-### 17.2 仅讨论/问答
+### 17.7 仅讨论/问答
 
 ```
 POST /chat/discuss
@@ -1618,7 +1745,7 @@ POST /chat/discuss
 
 响应结构与 `/chat/modify` 相同，但 `fileId` 和 `fileUrl` 固定为 `null`，`changes` 为空数组。
 
-### 17.3 版本链与文件回顾
+### 17.8 版本链与文件回顾
 
 每次 `/chat/modify` 成功后返回的 `fileId` 是新版本文件。旧版本文件自动在文件列表中隐藏（通过 `versionOf`链表机制），但可通过会话历史消息中的
 `fileId` 回顾。

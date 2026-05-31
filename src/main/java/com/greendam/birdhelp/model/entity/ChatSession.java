@@ -1,16 +1,13 @@
 package com.greendam.birdhelp.model.entity;
 
 import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
-
-import java.io.Serializable;
-import java.time.LocalDateTime;
+import lombok.EqualsAndHashCode;
 
 /**
  * <p>
- * 对话修改会话表实体类，映射数据表 {@code chat_session}。
+ * 对话修改会话表实体类，映射数据表 {@code chat_session}，继承 {@link BaseEntity} 获得审计字段。
  * </p>
  *
  * <h3>会话与文件的绑定关系</h3>
@@ -20,6 +17,10 @@ import java.time.LocalDateTime;
  *   <li>对话窗口隶属于 {@code sessionId}，不隶属于具体文件</li>
  * </ul>
  *
+ * <h3>审计字段（继承自 {@link BaseEntity}）</h3>
+ * <p>{@code createTime} / {@code createBy} / {@code updateTime} / {@code updateBy} / {@code delFlag}
+ * 由 {@code MyMetaObjectHandler} 自动填充。</p>
+ *
  * <h3>版本链</h3>
  * <p>每次修改生成新文件，通过 {@code file_record.version_of} 形成单向链表。
  * 列表只展示链尾文件，但用户可通过会话回顾任意历史版本。</p>
@@ -27,9 +28,10 @@ import java.time.LocalDateTime;
  * @author ForeverGreenDam
  * @see com.greendam.birdhelp.model.entity.FileRecord#getVersionOf()
  */
+@EqualsAndHashCode(callSuper = false)
 @TableName(value = "chat_session")
 @Data
-public class ChatSession implements Serializable {
+public class ChatSession extends BaseEntity {
 
     /**
      * 主键 ID，数据库自增。
@@ -69,23 +71,12 @@ public class ChatSession implements Serializable {
     private String docType;
 
     /**
+     * 会话标题（取自原始文件名，创建时自动填入，支持后续重命名）。
+     */
+    private String title;
+
+    /**
      * 消息总数（冗余字段，避免每次 COUNT 查询）。
      */
     private Integer messageCount;
-
-    /**
-     * 创建时间。
-     */
-    private LocalDateTime createTime;
-
-    /**
-     * 最后更新时间。
-     */
-    private LocalDateTime updateTime;
-
-    /**
-     * 逻辑删除：{@code 0} - 未删除，{@code 1} - 已删除。
-     */
-    @TableLogic
-    private Integer delFlag;
 }

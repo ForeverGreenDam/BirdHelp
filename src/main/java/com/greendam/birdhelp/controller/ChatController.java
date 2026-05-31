@@ -7,11 +7,13 @@ import com.greendam.birdhelp.common.utils.AiModuleCaller;
 import com.greendam.birdhelp.exception.ErrorCode;
 import com.greendam.birdhelp.model.dto.ChatDiscussDTO;
 import com.greendam.birdhelp.model.dto.ChatModifyDTO;
+import com.greendam.birdhelp.model.dto.CreateSessionDTO;
+import com.greendam.birdhelp.model.entity.ChatSession;
+import com.greendam.birdhelp.model.vo.ChatSessionDetailVO;
+import com.greendam.birdhelp.model.vo.ChatSessionVO;
+import com.greendam.birdhelp.service.ChatSessionService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import java.util.HashMap;
@@ -48,7 +50,98 @@ public class ChatController {
     private AiModuleCaller aiModuleCaller;
 
     @Resource
+    private ChatSessionService chatSessionService;
+
+    @Resource
     private ObjectMapper objectMapper;
+
+    // ==================== 会话管理（纯 Java，不调用 Python） ====================
+
+    /**
+     * 创建新会话。用户选中文件后调用，Java 生成 sessionId 并入库，返回给前端用于后续对话。
+     *
+     * <h3>请求体示例</h3>
+     * <pre>{@code
+     * {
+     *     "fileId": "100",
+     *     "docType": "ppt",
+     *     "projectId": 1,
+     *     "title": "自定义标题（可选）"
+     * }
+     * }</pre>
+     *
+     * @param dto 含 fileId / docType / projectId / title(可选)
+     * @return 新会话的 sessionId 和 title
+     */
+    @PostMapping("/session")
+    public BaseResponse<Map<String, Object>> createSession(@RequestBody CreateSessionDTO dto) {
+        Long userId = BaseContext.getCurrentId();
+
+        if (dto.getFileId() == null || dto.getDocType() == null || dto.getProjectId() == null) {
+            return BaseResponse.error(ErrorCode.PARAMS_ERROR, "缺少必填参数: fileId/docType/projectId");
+        }
+
+        String sessionId = java.util.UUID.randomUUID().toString();
+        Long originalFileId = Long.parseLong(dto.getFileId());
+
+        ChatSession session = chatSessionService.getOrCreateSession(
+                sessionId, userId, dto.getProjectId(), originalFileId, dto.getDocType(), dto.getTitle());
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("sessionId", session.getSessionId());
+        data.put("title", session.getTitle());
+
+        log.info("会话已创建: sessionId={}, title={}, fileId={}, docType={}, userId={}",
+                sessionId, session.getTitle(), dto.getFileId(), dto.getDocType(), userId);
+        return BaseResponse.success(data);
+    }
+
+    /**
+     * 获取当前用户的所有会话列表（全局左侧栏）。
+     * <p>按最后更新时间倒序排列，不含消息内容，仅返回摘要信息（标题、文件类型、消息数、最后一条消息预览）。</p>
+     *
+     * @return 会话视图列表
+     */
+    @GetMapping("/sessions")
+    public BaseResponse<List<ChatSessionVO>> listSessions() {
+        Long userId = BaseContext.getCurrentId();
+        List<ChatSessionVO> sessions = chatSessionService.listUserSessions(userId);
+        log.info("会话列表查询: userId={}, count={}", userId, sessions.size());
+        return BaseResponse.success(sessions);
+    }
+
+    /**
+     * 获取会话详情（含完整历史消息），用于点击左侧标签后恢复会话。
+     * <p>返回会话元信息 + 所有消息（按时间正序）。前端遍历 messages，
+     * 收集 assistant 消息中非空的 {@code fileId} 构建版本时间线。</p>
+     *
+     * @param sessionId 会话 ID（路径参数）
+     * @return 会话详情（含 messages 数组）
+     */
+    @GetMapping("/session/{sessionId}")
+    public BaseResponse<ChatSessionDetailVO> getSessionDetail(@PathVariable String sessionId) {
+        ChatSessionDetailVO detail = chatSessionService.getSessionDetail(sessionId);
+        log.info("会话详情查询: sessionId={}, messageCount={}",
+                sessionId, detail.getMessages() != null ? detail.getMessages().size() : 0);
+        return BaseResponse.success(detail);
+    }
+
+    /**
+     * 删除会话（软删除，不涉及文件）。
+     * <p>仅将 {@code chat_session.del_flag} 置为 1，消息记录保留不删，
+     * 该会话涉及的所有文件不受影响。</p>
+     *
+     * @param sessionId 会话 ID（路径参数）
+     * @return 空响应
+     */
+    @DeleteMapping("/session/{sessionId}")
+    public BaseResponse<Void> deleteSession(@PathVariable String sessionId) {
+        chatSessionService.deleteSession(sessionId);
+        log.info("会话已删除: sessionId={}", sessionId);
+        return BaseResponse.success();
+    }
+
+    // ==================== 对话代理（调用 Python） ====================
 
     /**
      * 对话修改文档。接收用户修改指令，代理转发至 Python AI 模块执行 LLM 修改 + 文件重建。
@@ -109,6 +202,17 @@ public class ChatController {
 
             @SuppressWarnings("unchecked")
             Map<String, Object> modifyData = (Map<String, Object>) pythonResp.get("data");
+
+            // Python 首轮对话后返回 LLM 生成的标题，回填到 chat_session
+            if (modifyData != null && modifyData.get("title") instanceof String) {
+                String generatedTitle = (String) modifyData.get("title");
+                if (!generatedTitle.isBlank()) {
+                    chatSessionService.updateTitle(dto.getSessionId(), generatedTitle);
+                    // 前端拿到最新标题后可即时更新左侧栏标签
+                    modifyData.put("title", generatedTitle);
+                }
+            }
+
             return BaseResponse.success(modifyData);
 
         } catch (Exception e) {

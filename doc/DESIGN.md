@@ -410,16 +410,30 @@ Java 后端（本工程）                  AI 模块（另建工程）
                                       Redis 向量存储与检索
 ```
 
-### 7.2 AI 模块暴露的接口
+### 7.2 ChatController 提供的接口
 
-前端通过 Java 代理间接调用 Python。Java 端 `ChatController` + `AiModuleCaller` 负责 JWT 鉴权、日志记录和 RSA 签名转发。
+`ChatController` 是用户端控制器（JWT 鉴权），提供两种接口：
 
-| 方法     | 路径                  | 用途             | 代理方式                                  |
-|--------|---------------------|----------------|---------------------------------------|
-| POST   | /ai/chat/modify     | 对话式修改文档        | ChatController → AiModuleCaller (RSA) |
-| POST   | /ai/chat/discuss    | 仅讨论/问答         | ChatController → AiModuleCaller (RSA) |
-| POST   | /ai/material/upload | 上传素材并触发 RAG 摄取 | 前端直调                                  |
-| DELETE | /ai/material/{id}   | 删除素材           | 前端直调                                  |
+**纯 Java 接口（不调用 Python）：**
+
+| 方法  | 路径                            | 用途                       |
+|-----|-------------------------------|--------------------------|
+| GET | /api/chat/sessions            | 全局左侧栏会话列表（该用户所有，按更新时间倒序） |
+| GET | /api/chat/session/{sessionId} | 会话详情 + 完整历史消息            |
+
+**代理接口（转发至 Python）：**
+
+| 方法   | 路径                | 用途     | 代理方式                                                                          |
+|------|-------------------|--------|-------------------------------------------------------------------------------|
+| POST | /api/chat/modify  | 对话修改文档 | ChatController → AiModuleCaller.chatModify() (RSA) → Python /ai/chat/modify   |
+| POST | /api/chat/discuss | 仅讨论/问答 | ChatController → AiModuleCaller.chatDiscuss() (RSA) → Python /ai/chat/discuss |
+
+**素材接口（前端直调 Python）：**
+
+| 方法     | 路径                  | 用途             |
+|--------|---------------------|----------------|
+| POST   | /ai/material/upload | 上传素材并触发 RAG 摄取 |
+| DELETE | /ai/material/{id}   | 删除素材           |
 
 ### 7.3 Java 后端暴露给 AI 模块的内部接口
 

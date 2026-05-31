@@ -121,7 +121,7 @@ public class ChatInternalController {
             return BaseResponse.error(ErrorCode.PARAMS_ERROR, "参数不完整: sessionId/userId/projectId/originalFileId/docType 均为必填");
         }
 
-        chatSessionService.getOrCreateSession(sessionId, userId, projectId, originalFileId, docType);
+        chatSessionService.getOrCreateSession(sessionId, userId, projectId, originalFileId, docType, null);
         List<ChatMessage> messages = chatSessionService.getMessages(sessionId);
 
         Map<String, Object> data = new HashMap<>();
