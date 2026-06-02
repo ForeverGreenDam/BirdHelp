@@ -154,6 +154,47 @@ public class DocGenerationPublisher {
                 .build();
     }
 
+    /**
+     * 重发失败的任务。从 Redis 读取原始消息，清除旧状态后重新投递。
+     */
+    public void resend(String taskId) {
+        String messageKey = "task:" + taskId + ":message";
+        String routingKeyKey = "task:" + taskId + ":routingKey";
+
+        String messageJson = stringRedisTemplate.opsForValue().get(messageKey);
+        String routingKey = stringRedisTemplate.opsForValue().get(routingKeyKey);
+
+        if (messageJson == null || routingKey == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "任务消息已过期或不存在");
+        }
+
+        DocGenerationMessage msg;
+        try {
+            msg = objectMapper.readValue(messageJson, DocGenerationMessage.class);
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "任务消息解析失败");
+        }
+
+        String key = "task:" + taskId;
+        stringRedisTemplate.delete(key + ":status");
+        stringRedisTemplate.delete(key + ":errorCode");
+        stringRedisTemplate.delete(key + ":errorMessage");
+        stringRedisTemplate.delete(key + ":stage");
+        stringRedisTemplate.delete(key + ":progress");
+        stringRedisTemplate.delete(key + ":fileId");
+        stringRedisTemplate.delete(key + ":fileUrl");
+        stringRedisTemplate.delete(key + ":fileName");
+        stringRedisTemplate.delete(key + ":qaLowestScore");
+        stringRedisTemplate.delete(key + ":qaPassedCount");
+        stringRedisTemplate.delete(key + ":qaTotalCount");
+
+        int priority = switch (msg.getDocType()) {
+            case "ppt" -> 8;
+            default -> 3;
+        };
+        send(msg, routingKey, priority);
+    }
+
     // ==================== 底层发送 ====================
 
     private void send(DocGenerationMessage msg, String routingKey, int priority) {

@@ -1,13 +1,11 @@
 package com.greendam.birdhelp.controller.admin;
 
 import com.greendam.birdhelp.common.BaseResponse;
+import com.greendam.birdhelp.common.utils.DocGenerationPublisher;
 import com.greendam.birdhelp.model.vo.admin.AdminTaskVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
@@ -36,6 +34,9 @@ public class AdminTaskController {
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private DocGenerationPublisher docGenerationPublisher;
 
     /**
      * <p>查询所有文档生成任务列表。</p>
@@ -72,6 +73,25 @@ public class AdminTaskController {
             return BaseResponse.error(40400, "任务不存在或已过期");
         }
         return BaseResponse.success(vo);
+    }
+
+    /**
+     * <p>重试失败的任务。从 Redis 读取原始消息并重新投递到 RabbitMQ。</p>
+     *
+     * @param taskId 任务 ID
+     * @return 重试结果
+     */
+    @PostMapping("/{taskId}/retry")
+    public BaseResponse<Void> retry(@PathVariable String taskId) {
+        String status = stringRedisTemplate.opsForValue().get(TASK_PREFIX + taskId + ":status");
+        if (status == null) {
+            return BaseResponse.error(40400, "任务不存在或已过期");
+        }
+        if (!"failed".equals(status)) {
+            return BaseResponse.error(40000, "只能重试失败的任务，当前状态: " + status);
+        }
+        docGenerationPublisher.resend(taskId);
+        return BaseResponse.success();
     }
 
     /**
