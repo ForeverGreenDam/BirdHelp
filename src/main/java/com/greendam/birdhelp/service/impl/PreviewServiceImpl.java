@@ -22,7 +22,11 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -38,7 +42,7 @@ import java.util.concurrent.TimeUnit;
  *
  * <h3>渲染管道</h3>
  * <pre>
- * 原始文件 → LibreOffice 无头转 PDF → PDFBox 逐页渲染 150 DPI PNG → 上传 OSS（获 URL）
+ * 原始文件 → LibreOffice 无头转 PDF → PDFBox 逐页渲染 96 DPI JPEG(85%质量) → 上传 OSS（获 URL）
  *   → 写入 file_record.preview_pages → Redis 热缓存 1h
  * </pre>
  *
@@ -61,7 +65,8 @@ public class PreviewServiceImpl implements PreviewService {
 
     private static final String REDIS_PREVIEW_PREFIX = "preview:";
     private static final long REDIS_PREVIEW_TTL_HOURS = 1;
-    private static final int RENDER_DPI = 150;
+    private static final int RENDER_DPI = 96;
+    private static final float JPEG_QUALITY = 0.85f;
     private static final int LIBREOFFICE_TIMEOUT_SECONDS = 60;
     private final ObjectMapper objectMapper = new ObjectMapper();
     @Resource
@@ -260,17 +265,25 @@ public class PreviewServiceImpl implements PreviewService {
             for (int i = 0; i < totalPages; i++) {
                 int pageNumber = i + 1;
 
-                // 渲染为 BufferedImage（150 DPI，RGB 色彩模式）
+                // 渲染为 BufferedImage（96 DPI，RGB 色彩模式，屏幕预览足够）
                 BufferedImage image = renderer.renderImageWithDPI(i, RENDER_DPI, ImageType.RGB);
 
-                // 编码为 PNG 字节
+                // 编码为 JPEG（85% 质量，比 PNG 小 10-20 倍，预览无感知差异）
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                ImageIO.write(image, "png", baos);
-                byte[] pngBytes = baos.toByteArray();
+                ImageWriter jpegWriter = ImageIO.getImageWritersByFormatName("jpeg").next();
+                try (ImageOutputStream ios = ImageIO.createImageOutputStream(baos)) {
+                    jpegWriter.setOutput(ios);
+                    ImageWriteParam param = jpegWriter.getDefaultWriteParam();
+                    param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                    param.setCompressionQuality(JPEG_QUALITY);
+                    jpegWriter.write(null, new IIOImage(image, null, null), param);
+                }
+                jpegWriter.dispose();
+                byte[] jpgBytes = baos.toByteArray();
 
                 // 上传到 OSS
                 String objectName = buildPreviewObjectName(record, pageNumber);
-                String imageUrl = aliOssUtil.upload(pngBytes, objectName);
+                String imageUrl = aliOssUtil.upload(jpgBytes, objectName);
 
                 // 获取该页的布局标注
                 Map<String, String> annotations = pageAnnotations.getOrDefault(pageNumber, Collections.emptyMap());
@@ -349,7 +362,7 @@ public class PreviewServiceImpl implements PreviewService {
      * 构建预览图片的 OSS 对象名。
      */
     private String buildPreviewObjectName(FileRecord record, int pageNumber) {
-        return String.format("preview/%d/%s/page_%03d.png",
+        return String.format("preview/%d/%s/page_%03d.jpg",
                 record.getProjectId(),
                 record.getId(),
                 pageNumber);
