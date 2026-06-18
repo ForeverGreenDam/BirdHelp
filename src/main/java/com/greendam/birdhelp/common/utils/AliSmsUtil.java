@@ -3,7 +3,6 @@ package com.greendam.birdhelp.common.utils;
 import com.aliyun.dysmsapi20170525.Client;
 import com.aliyun.dysmsapi20170525.models.SendSmsRequest;
 import com.aliyun.dysmsapi20170525.models.SendSmsResponse;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
@@ -12,14 +11,14 @@ import javax.annotation.Resource;
 
 @Data
 @Slf4j
-public class AliMessageUtil {
+public class AliSmsUtil {
     private String endpoint;
     private String accessKeyId;
     private String accessKeySecret;
     private String signName;
     private String templateCode;
 
-    public AliMessageUtil(String endpoint, String accessKeyId, String accessKeySecret, String signName, String templateCode) {
+    public AliSmsUtil(String endpoint, String accessKeyId, String accessKeySecret, String signName, String templateCode) {
         this.endpoint = endpoint;
         this.accessKeyId = accessKeyId;
         this.accessKeySecret = accessKeySecret;

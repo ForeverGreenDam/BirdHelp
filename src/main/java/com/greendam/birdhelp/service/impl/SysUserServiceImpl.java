@@ -1,11 +1,13 @@
 package com.greendam.birdhelp.service.impl;
 
+import cn.hutool.core.util.PhoneUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.crypto.digest.BCrypt;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.greendam.birdhelp.common.utils.AliOssUtil;
+import com.greendam.birdhelp.common.utils.AliSmsUtil;
 import com.greendam.birdhelp.common.utils.JwtUtil;
 import com.greendam.birdhelp.common.utils.MailUtil;
 import com.greendam.birdhelp.constant.JwtClaimsConstant;
@@ -65,6 +67,9 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
     @Resource
     private MailUtil mailUtil;
 
+    @Resource
+    private AliSmsUtil aliSmsUtil;
+
     /** Redis 验证码键前缀 */
     private static final String VERIFY_CODE_PREFIX = "verify_code:";
 
@@ -86,9 +91,10 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
 
         if (MailUtil.isEmail(dto.getTarget())) {
             mailUtil.sendVerifyCode(dto.getTarget(), code, dto.getType());
-        } else {
-            log.info("向 {} 发送验证码: {} (类型: {})", dto.getTarget(), code, dto.getType());
+        } else if (PhoneUtil.isPhone(dto.getTarget())) {
+            aliSmsUtil.sendMessage(dto.getTarget(), code);
         }
+        log.info("向 {} 发送验证码: {} (类型: {})", dto.getTarget(), code, dto.getType());
     }
 
     /**

@@ -2,7 +2,7 @@ package com.greendam.birdhelp.config;
 
 import com.aliyun.dysmsapi20170525.Client;
 import com.aliyun.teaopenapi.models.Config;
-import com.greendam.birdhelp.common.utils.AliMessageUtil;
+import com.greendam.birdhelp.common.utils.AliSmsUtil;
 import com.greendam.birdhelp.properties.AliMessageProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -25,9 +25,9 @@ public class AliMessageConfig {
 
     @Bean
     @ConditionalOnMissingBean
-    public AliMessageUtil aliMessageUtil(AliMessageProperties aliMessageProperties) {
+    public AliSmsUtil aliMessageUtil(AliMessageProperties aliMessageProperties) {
         log.info("开始创建阿里短信工具类对象:{}", aliMessageProperties);
-        return new AliMessageUtil(
+        return new AliSmsUtil(
                 aliMessageProperties.getEndpoint(),
                 aliMessageProperties.getAccessKeyId(),
                 aliMessageProperties.getAccessKeySecret(),
