@@ -96,14 +96,14 @@ public class UserController {
     }
 
     /**
-     * <p>短信验证码登录（预留，暂未实现）。</p>
+     * <p>短信验证码登录</p>
      *
      * @return 暂时返回空成功响应
      */
     @PostMapping("/login/sms")
-    public BaseResponse<Void> loginBySms() {
-
-        return BaseResponse.success();
+    public BaseResponse<LoginVO> loginBySms(SmsLoginDTO smsLoginDTO) {
+        LoginVO result = sysUserService.loginBySms(smsLoginDTO);
+        return BaseResponse.success(result);
     }
 
     /**

@@ -442,6 +442,12 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
         return url;
     }
 
+    @Override
+    public LoginVO loginBySms(SmsLoginDTO dto) {
+        //todo ：等待实现
+        return null;
+    }
+
     // ==================== 内部方法 ====================
 
     /**

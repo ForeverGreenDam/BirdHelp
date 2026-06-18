@@ -157,4 +157,12 @@ public interface SysUserService extends IService<SysUser> {
      * @return 上传成功后文件的 OSS 访问 URL
      */
     String uploadAvatar(Long userId, byte[] fileBytes, String originalFilename);
+
+    /**
+     * 短信验证码登录接口
+     *
+     * @param dto 短信验证码参数
+     * @return LoginVO
+     */
+    LoginVO loginBySms(SmsLoginDTO dto);
 }
