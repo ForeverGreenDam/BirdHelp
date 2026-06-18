@@ -102,3 +102,9 @@ birdhelp:
     dlq: birdhelp.doc.generation.dlq
   api-key:
     encryption-secret: ${api-key.encryption-secret}
+alimessage:
+  access-key-id: ${alimessage.access-key-id}
+  access-key-secret: ${alimessage.access-key-secret}
+  endpoint: ${alimessage.endpoint}
+  sign-name: ${alimessage.sign-name}
+  template-code: ${alimessage.template-code}

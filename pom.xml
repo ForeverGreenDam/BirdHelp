@@ -113,6 +113,12 @@
             <artifactId>imageio-jpeg</artifactId>
             <version>3.10.1</version>
         </dependency>
+        <!--Ali短信服务-->
+        <dependency>
+            <groupId>com.aliyun</groupId>
+            <artifactId>dysmsapi20170525</artifactId>
+            <version>4.5.1</version>
+        </dependency>
         <dependency>
             <groupId>com.twelvemonkeys.imageio</groupId>
             <artifactId>imageio-core</artifactId>
