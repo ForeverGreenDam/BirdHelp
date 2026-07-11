@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.greendam.birdhelp.common.utils.AliOssUtil;
+import com.greendam.birdhelp.common.utils.AliSmsUtil;
 import com.greendam.birdhelp.common.utils.JwtUtil;
 import com.greendam.birdhelp.common.utils.MailUtil;
 import com.greendam.birdhelp.constant.JwtClaimsConstant;
@@ -65,8 +66,25 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
     @Resource
     private MailUtil mailUtil;
 
+    /**
+     * Redis 短信发送限制键前缀
+     */
+    private static final String SMS_LIMIT_IP_PREFIX = "sms_limit:ip:";
+
     /** Redis 验证码键前缀 */
     private static final String VERIFY_CODE_PREFIX = "verify_code:";
+    private static final String SMS_LIMIT_PHONE_MINUTE_PREFIX = "sms_limit:phone:";
+    private static final String SMS_LIMIT_PHONE_HOUR_SUFFIX = ":hour";
+    private static final String SMS_LIMIT_PHONE_DAY_SUFFIX = ":day";
+    /**
+     * 发送频率限制常量
+     */
+    private static final int IP_LIMIT_PER_MINUTE = 5;      // 同一IP每分钟最多5次
+    private static final int PHONE_LIMIT_PER_MINUTE = 1;    // 同一手机号每分钟最多1次
+    private static final int PHONE_LIMIT_PER_HOUR = 5;      // 同一手机号每小时最多5次
+    private static final int PHONE_LIMIT_PER_DAY = 10;      // 同一手机号每天最多10次
+    @Resource
+    private AliSmsUtil aliSmsUtil;
 
     // ==================== 公开方法 ====================
 
@@ -74,21 +92,34 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
      * <p>生成 6 位随机验证码并存入 Redis。</p>
      *
      * <p>Key 格式：{@code verify_code:{type}:{target}}，有效期 5 分钟。
-     * 当前版本仅将验证码打印到日志，不实际发送短信或邮件。</p>
+     * 手机号场景调用阿里云短信服务发送，邮箱场景使用邮件发送。</p>
      *
      * @param dto 包含发送目标及验证码类型的请求体
      */
     @Override
     public void sendVerifyCode(SendCodeDTO dto) {
+        // 1. 检查发送频率限制（防刷）
+        checkSendFrequency(dto.getTarget());
+
+        // 2. 生成验证码
         String code = RandomUtil.randomNumbers(6);
         String key = VERIFY_CODE_PREFIX + dto.getType() + ":" + dto.getTarget();
         stringRedisTemplate.opsForValue().set(key, code, Duration.ofMinutes(5));
 
+        // 3. 判断是邮箱还是手机号，调用不同发送方式
         if (MailUtil.isEmail(dto.getTarget())) {
             mailUtil.sendVerifyCode(dto.getTarget(), code, dto.getType());
         } else {
-            log.info("向 {} 发送验证码: {} (类型: {})", dto.getTarget(), code, dto.getType());
+            // 调用阿里云短信服务
+            boolean success = aliSmsUtil.sendVerifyCode(dto.getTarget(), code);
+            if (!success) {
+                throw new BusinessException(ErrorCode.SMS_SEND_ERROR);
+            }
+            log.info("向手机号 {} 发送验证码成功 (类型: {})", dto.getTarget(), dto.getType());
         }
+
+        // 4. 记录发送次数（用于防刷）
+        incrementSendCount(dto.getTarget());
     }
 
     /**
@@ -190,6 +221,54 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
             throw new BusinessException(ErrorCode.PASSWORD_ERROR);
         }
 
+        String token = generateToken(user.getId());
+        return LoginVO.builder()
+                .token(token)
+                .userInfo(toUserInfoVO(user))
+                .build();
+    }
+
+    /**
+     * <p>短信验证码登录。</p>
+     *
+     * <p>使用手机号 + 验证码登录。若手机号未注册则自动创建新用户。</p>
+     *
+     * @param dto 包含手机号和验证码的请求体
+     * @return 登录结果，包含 JWT Token 和用户信息
+     * @throws BusinessException 错误码：
+     *                           <ul>
+     *                             <li>{@code USER_DISABLED(40007)} — 账号已被禁用</li>
+     *                             <li>{@code VERIFY_CODE_ERROR(40006)} — 验证码错误或已过期</li>
+     *                           </ul>
+     */
+    @Override
+    public LoginVO loginBySms(SmsLoginDTO dto) {
+        // 1. 根据手机号查找用户
+        SysUser user = lambdaQuery()
+                .eq(SysUser::getPhone, dto.getPhone())
+                .one();
+
+        // 2. 用户不存在则自动注册
+        if (user == null) {
+            user = new SysUser();
+            user.setPhone(dto.getPhone());
+            user.setUsername("user_" + dto.getPhone());
+            user.setNickname("用户" + dto.getPhone().substring(7));
+            user.setStatus(1);
+            user.setUserType(1);
+            save(user);
+            log.info("短信登录自动注册: {}", dto.getPhone());
+        }
+
+        // 3. 校验账号状态
+        if (user.getStatus() != null && user.getStatus() == 0) {
+            throw new BusinessException(ErrorCode.USER_DISABLED);
+        }
+
+        // 4. 消费验证码
+        consumeVerifyCode("login", dto.getPhone(), dto.getCode());
+
+        // 5. 签发JWT
         String token = generateToken(user.getId());
         return LoginVO.builder()
                 .token(token)
@@ -437,6 +516,61 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
     }
 
     // ==================== 内部方法 ====================
+
+    /**
+     * 检查发送频率是否超限（防刷机制）
+     *
+     * @param target 手机号或邮箱
+     * @throws BusinessException 频率超限时抛出
+     */
+    private void checkSendFrequency(String target) {
+        if (MailUtil.isEmail(target)) {
+            // 邮箱不限制频率
+            return;
+        }
+
+        // 1. 检查手机号分钟级限制
+        String phoneMinuteKey = SMS_LIMIT_PHONE_MINUTE_PREFIX + target;
+        String minuteValue = stringRedisTemplate.opsForValue().get(phoneMinuteKey);
+        if (minuteValue != null) {
+            throw new BusinessException(ErrorCode.SMS_TOO_FREQUENT, "验证码已发送，请1分钟后再试");
+        }
+
+        // 2. 检查手机号小时级限制
+        String phoneHourKey = SMS_LIMIT_PHONE_MINUTE_PREFIX + target + SMS_LIMIT_PHONE_HOUR_SUFFIX;
+        Long phoneHourCount = stringRedisTemplate.opsForValue().increment(phoneHourKey);
+        if (phoneHourCount == 1) {
+            stringRedisTemplate.expire(phoneHourKey, Duration.ofHours(1));
+        }
+        if (phoneHourCount > PHONE_LIMIT_PER_HOUR) {
+            throw new BusinessException(ErrorCode.SMS_TOO_FREQUENT, "该手机号1小时内发送次数过多");
+        }
+
+        // 3. 检查手机号天级限制
+        String phoneDayKey = SMS_LIMIT_PHONE_MINUTE_PREFIX + target + SMS_LIMIT_PHONE_DAY_SUFFIX;
+        Long phoneDayCount = stringRedisTemplate.opsForValue().increment(phoneDayKey);
+        if (phoneDayCount == 1) {
+            stringRedisTemplate.expire(phoneDayKey, Duration.ofDays(1));
+        }
+        if (phoneDayCount > PHONE_LIMIT_PER_DAY) {
+            throw new BusinessException(ErrorCode.SMS_SEND_LIMIT_EXCEEDED);
+        }
+    }
+
+    /**
+     * 记录发送次数（发送成功后调用）
+     *
+     * @param target 手机号或邮箱
+     */
+    private void incrementSendCount(String target) {
+        if (MailUtil.isEmail(target)) {
+            return;
+        }
+
+        // 设置分钟级标记（1分钟过期）
+        String phoneMinuteKey = SMS_LIMIT_PHONE_MINUTE_PREFIX + target;
+        stringRedisTemplate.opsForValue().set(phoneMinuteKey, "1", Duration.ofMinutes(1));
+    }
 
     /**
      * 签发 JWT 令牌。

@@ -94,6 +94,11 @@ alioss:
   access-key-secret: ${alioss.access-key-secret}
   bucket-name: ${alioss.bucket-name}
   endpoint: ${alioss.endpoint}
+alisms:
+  access-key-id: ${alisms.access-key-id}
+  access-key-secret: ${alisms.access-key-secret}
+  sign-name: ${alisms.sign-name}
+  template-code: ${alisms.template-code}
 birdhelp:
   rabbitmq:
     exchange: birdhelp.doc.generation

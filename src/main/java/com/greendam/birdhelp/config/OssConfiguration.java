@@ -1,6 +1,7 @@
 package com.greendam.birdhelp.config;
 
 import com.greendam.birdhelp.common.utils.AliOssUtil;
+import com.greendam.birdhelp.common.utils.AliSmsUtil;
 import com.greendam.birdhelp.properties.AliOssProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -8,7 +9,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 阿里OSS配置类，用于创建AliOssUtil对象
+ * 阿里云配置类，用于创建阿里云相关工具类对象
  */
 @Configuration
 @Slf4j
@@ -22,5 +23,12 @@ public class OssConfiguration {
                 aliOssProperties.getAccessKeyId(),
                 aliOssProperties.getAccessKeySecret(),
                 aliOssProperties.getBucketName());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AliSmsUtil aliSmsUtil() {
+        log.info("开始创建阿里云短信工具类对象");
+        return new AliSmsUtil();
     }
 }

@@ -81,6 +81,21 @@ public interface SysUserService extends IService<SysUser> {
     LoginVO loginByPassword(PasswordLoginDTO dto);
 
     /**
+     * <p>短信验证码登录。</p>
+     *
+     * <p>使用手机号 + 验证码登录。若手机号未注册则自动创建新用户。</p>
+     *
+     * @param dto 包含手机号和验证码的请求体
+     * @return 登录成功返回 {@link LoginVO}，包含 JWT Token 和用户信息
+     * @throws com.greendam.birdhelp.exception.BusinessException 错误码：
+     *                                                           <ul>
+     *                                                             <li>{@code USER_DISABLED(40007)} — 账号已被禁用</li>
+     *                                                             <li>{@code VERIFY_CODE_ERROR(40006)} — 验证码错误或已过期</li>
+     *                                                           </ul>
+     */
+    LoginVO loginBySms(SmsLoginDTO dto);
+
+    /**
      * <p>根据用户 ID 查询个人信息。</p>
      *
      * @param userId 用户 ID

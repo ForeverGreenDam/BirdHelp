@@ -49,6 +49,12 @@
             <artifactId>aliyun-sdk-oss</artifactId>
             <version>3.10.2</version>
         </dependency>
+        <!-- 阿里云短信服务 -->
+        <dependency>
+            <groupId>com.aliyun</groupId>
+            <artifactId>dysmsapi20170525</artifactId>
+            <version>3.0.0</version>
+        </dependency>
         <!-- huTool工具包-->
         <dependency>
             <groupId>cn.hutool</groupId>

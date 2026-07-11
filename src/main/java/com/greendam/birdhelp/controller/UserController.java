@@ -96,13 +96,18 @@ public class UserController {
     }
 
     /**
-     * <p>短信验证码登录（预留，暂未实现）。</p>
+     * <p>短信验证码登录。</p>
      *
-     * @return 暂时返回空成功响应
+     * <p>使用手机号 + 短信验证码完成登录。若手机号未注册则自动创建新用户并登录。</p>
+     *
+     * @param dto 包含手机号和验证码的请求体
+     * @return 登录成功返回 JWT Token 及用户信息
+     * @throws com.greendam.birdhelp.exception.BusinessException 验证码校验失败或账号被禁用时抛出
      */
     @PostMapping("/login/sms")
-    public BaseResponse<Void> loginBySms() {
-        return BaseResponse.success();
+    public BaseResponse<LoginVO> loginBySms(@Valid @RequestBody SmsLoginDTO dto) {
+        LoginVO result = sysUserService.loginBySms(dto);
+        return BaseResponse.success(result);
     }
 
     /**
