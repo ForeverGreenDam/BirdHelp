@@ -29,7 +29,7 @@ COPY ./target/BirdHelp-0.0.1-SNAPSHOT.jar ./app.jar
 
 RUN mkdir -p upload
 
-EXPOSE 7890
+EXPOSE 7891
 
 ENV JAVA_OPTS="-Xms256m -Xmx512m"
 

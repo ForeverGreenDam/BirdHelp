@@ -52,7 +52,7 @@ public class AiModuleCaller {
             log.info("AI 模块调用客户端已初始化: baseUrl={}", baseUrl);
         } else {
             log.warn("AI 模块私钥未配置（ai-module.private-key），对 AI 模块的调用将跳过。" +
-                    "请在 application-dev.yml 中配置。");
+                    "请在 application-test.yml 中配置。");
         }
     }
 

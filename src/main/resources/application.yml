@@ -1,13 +1,13 @@
 # 应用服务 WEB 访问端口
 server:
-  port: 7890
+  port: 7891
   servlet:
     context-path: /api
 
 
 spring:
   profiles:
-    active: dev
+    active: test
   datasource:
     url: jdbc:mysql://${datasource.url}/birdhelp?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&autoReconnect=true&autoReconnectForPools=true&maxReconnects=3&initialTimeout=3000
     username: ${datasource.username}
