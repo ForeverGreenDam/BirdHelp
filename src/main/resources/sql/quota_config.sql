@@ -3,6 +3,7 @@ CREATE TABLE `quota_config` (
     `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
     `level` tinyint NOT NULL COMMENT '会员等级 0-免费 1-月卡 2-季卡 3-年卡',
     `daily_limit` int NOT NULL COMMENT '每日生成次数上限',
+    `duration_days` int NOT NULL DEFAULT 0 COMMENT '有效天数（0表示不限，仅免费等级使用）',
     `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `create_by` varchar(64) DEFAULT '' COMMENT '创建人',
     `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -13,7 +14,11 @@ CREATE TABLE `quota_config` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='额度配置表';
 
 -- 初始额度配置数据
-INSERT INTO `quota_config` (`level`, `daily_limit`) VALUES (0, 10);
-INSERT INTO `quota_config` (`level`, `daily_limit`) VALUES (1, 30);
-INSERT INTO `quota_config` (`level`, `daily_limit`) VALUES (2, 60);
-INSERT INTO `quota_config` (`level`, `daily_limit`) VALUES (3, 100);
+INSERT INTO `quota_config` (`level`, `daily_limit`, `duration_days`)
+VALUES (0, 10, 0);
+INSERT INTO `quota_config` (`level`, `daily_limit`, `duration_days`)
+VALUES (1, 30, 30);
+INSERT INTO `quota_config` (`level`, `daily_limit`, `duration_days`)
+VALUES (2, 60, 90);
+INSERT INTO `quota_config` (`level`, `daily_limit`, `duration_days`)
+VALUES (3, 100, 365);

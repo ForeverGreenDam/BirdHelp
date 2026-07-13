@@ -9,9 +9,11 @@ import com.greendam.birdhelp.exception.BusinessException;
 import com.greendam.birdhelp.exception.ErrorCode;
 import com.greendam.birdhelp.mapper.MemberOrderMapper;
 import com.greendam.birdhelp.mapper.MemberPlanMapper;
+import com.greendam.birdhelp.mapper.QuotaConfigMapper;
 import com.greendam.birdhelp.mapper.UserQuotaMapper;
 import com.greendam.birdhelp.model.entity.MemberOrder;
 import com.greendam.birdhelp.model.entity.MemberPlan;
+import com.greendam.birdhelp.model.entity.QuotaConfig;
 import com.greendam.birdhelp.model.entity.UserQuota;
 import com.greendam.birdhelp.model.vo.MemberOrderVO;
 import com.greendam.birdhelp.model.vo.MemberStatusVO;
@@ -48,6 +50,8 @@ public class MemberOrderServiceImpl extends ServiceImpl<MemberOrderMapper, Membe
     private static final String SUBJECT_PREFIX = "BirdHelp会员-";
     @Resource
     private MemberPlanMapper memberPlanMapper;
+    @Resource
+    private QuotaConfigMapper quotaConfigMapper;
     @Resource
     private UserQuotaMapper userQuotaMapper;
     @Resource
@@ -197,14 +201,12 @@ public class MemberOrderServiceImpl extends ServiceImpl<MemberOrderMapper, Membe
                 memberExpireAt = null;
             }
 
-            // 查询对应等级的每日限额
-            if (memberLevel > 0) {
-                MemberPlan plan = memberPlanMapper.selectOne(
-                        new LambdaQueryWrapper<MemberPlan>().eq(MemberPlan::getLevel, memberLevel)
-                );
-                if (plan != null) {
-                    dailyLimit = plan.getDailyLimit();
-                }
+            // 从额度配置查询对应等级的每日限额
+            QuotaConfig quotaConfig = quotaConfigMapper.selectOne(
+                    new LambdaQueryWrapper<QuotaConfig>().eq(QuotaConfig::getLevel, memberLevel)
+            );
+            if (quotaConfig != null) {
+                dailyLimit = quotaConfig.getDailyLimit();
             }
         }
 
@@ -232,6 +234,15 @@ public class MemberOrderServiceImpl extends ServiceImpl<MemberOrderMapper, Membe
             return;
         }
 
+        // 从额度配置获取有效天数
+        QuotaConfig quotaConfig = quotaConfigMapper.selectOne(
+                new LambdaQueryWrapper<QuotaConfig>().eq(QuotaConfig::getLevel, plan.getLevel())
+        );
+        if (quotaConfig == null) {
+            log.error("激活会员失败，额度配置不存在：level={}", plan.getLevel());
+            return;
+        }
+
         // 查询或创建用户额度记录
         LambdaQueryWrapper<UserQuota> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(UserQuota::getUserId, userId);
@@ -251,10 +262,10 @@ public class MemberOrderServiceImpl extends ServiceImpl<MemberOrderMapper, Membe
 
         if (quota.getMemberExpireAt() != null && quota.getMemberExpireAt().isAfter(now)) {
             // 当前会员未过期，在现有到期时间上追加
-            newExpireAt = quota.getMemberExpireAt().plusDays(plan.getDurationDays());
+            newExpireAt = quota.getMemberExpireAt().plusDays(quotaConfig.getDurationDays());
         } else {
             // 已过期或无会员，从现在开始计算
-            newExpireAt = now.plusDays(plan.getDurationDays());
+            newExpireAt = now.plusDays(quotaConfig.getDurationDays());
         }
 
         // 更新用户额度

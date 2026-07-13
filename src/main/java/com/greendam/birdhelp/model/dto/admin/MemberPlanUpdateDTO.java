@@ -35,14 +35,4 @@ public class MemberPlanUpdateDTO {
      * 实际售价（支付用）。
      */
     private BigDecimal actualPrice;
-
-    /**
-     * 有效天数。
-     */
-    private Integer durationDays;
-
-    /**
-     * 每日生成次数上限。
-     */
-    private Integer dailyLimit;
 }

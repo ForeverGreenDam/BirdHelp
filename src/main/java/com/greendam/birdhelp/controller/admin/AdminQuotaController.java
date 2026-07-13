@@ -3,6 +3,7 @@ package com.greendam.birdhelp.controller.admin;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.greendam.birdhelp.common.BaseResponse;
 import com.greendam.birdhelp.common.context.BaseContext;
+import com.greendam.birdhelp.model.dto.admin.QuotaConfigCreateDTO;
 import com.greendam.birdhelp.model.dto.admin.QuotaConfigUpdateDTO;
 import com.greendam.birdhelp.model.dto.admin.UserQuotaMemberUpdateDTO;
 import com.greendam.birdhelp.model.entity.QuotaConfig;
@@ -65,6 +66,34 @@ public class AdminQuotaController {
         quotaService.adminUpdateConfig(dto);
         operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
                 "UPDATE", "quota_config", dto.getId().toString(), "更新额度配置");
+        return BaseResponse.success();
+    }
+
+    /**
+     * <p>新增额度配置。</p>
+     *
+     * @param dto 包含等级、每日上限及有效天数的请求体
+     * @return 操作成功无数据返回
+     */
+    @PostMapping("/config")
+    public BaseResponse<Void> createConfig(@Valid @RequestBody QuotaConfigCreateDTO dto) {
+        quotaService.adminCreateConfig(dto);
+        operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
+                "CREATE", "quota_config", null, "新增额度配置，等级: " + dto.getLevel());
+        return BaseResponse.success();
+    }
+
+    /**
+     * <p>删除额度配置。</p>
+     *
+     * @param id 配置 ID
+     * @return 操作成功无数据返回
+     */
+    @DeleteMapping("/config/{id}")
+    public BaseResponse<Void> deleteConfig(@PathVariable Long id) {
+        quotaService.adminDeleteConfig(id);
+        operationLogService.record(BaseContext.getCurrentId(), BaseContext.getCurrentName(),
+                "DELETE", "quota_config", id.toString(), "删除额度配置");
         return BaseResponse.success();
     }
 

@@ -6,9 +6,13 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.greendam.birdhelp.exception.BusinessException;
 import com.greendam.birdhelp.exception.ErrorCode;
 import com.greendam.birdhelp.mapper.*;
+import com.greendam.birdhelp.model.dto.admin.QuotaConfigCreateDTO;
 import com.greendam.birdhelp.model.dto.admin.QuotaConfigUpdateDTO;
 import com.greendam.birdhelp.model.dto.admin.UserQuotaMemberUpdateDTO;
-import com.greendam.birdhelp.model.entity.*;
+import com.greendam.birdhelp.model.entity.QuotaConfig;
+import com.greendam.birdhelp.model.entity.QuotaLog;
+import com.greendam.birdhelp.model.entity.SysUser;
+import com.greendam.birdhelp.model.entity.UserQuota;
 import com.greendam.birdhelp.model.vo.QuotaInfoVO;
 import com.greendam.birdhelp.model.vo.admin.AdminQuotaLogVO;
 import com.greendam.birdhelp.model.vo.admin.AdminUserQuotaVO;
@@ -158,14 +162,51 @@ public class QuotaServiceImpl extends ServiceImpl<UserQuotaMapper, UserQuota>
     }
 
     @Override
+    public void adminCreateConfig(QuotaConfigCreateDTO dto) {
+        // 检查 level 是否已存在
+        Long count = quotaConfigMapper.selectCount(
+                new LambdaQueryWrapper<QuotaConfig>().eq(QuotaConfig::getLevel, dto.getLevel())
+        );
+        if (count > 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "该等级配置已存在");
+        }
+
+        QuotaConfig config = new QuotaConfig();
+        config.setLevel(dto.getLevel());
+        config.setDailyLimit(dto.getDailyLimit());
+        config.setDurationDays(dto.getDurationDays());
+        quotaConfigMapper.insert(config);
+        log.info("新增额度配置成功，等级：{}，每日上限：{}，有效天数：{}", dto.getLevel(), dto.getDailyLimit(), dto.getDurationDays());
+    }
+
+    @Override
     public void adminUpdateConfig(QuotaConfigUpdateDTO dto) {
         QuotaConfig config = quotaConfigMapper.selectById(dto.getId());
         if (config == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "额度配置不存在");
         }
-        config.setDailyLimit(dto.getDailyLimit());
+        if (dto.getDailyLimit() != null) {
+            config.setDailyLimit(dto.getDailyLimit());
+        }
+        if (dto.getDurationDays() != null) {
+            config.setDurationDays(dto.getDurationDays());
+        }
         quotaConfigMapper.updateById(config);
-        log.info("管理员更新额度配置: level={}, dailyLimit={}", config.getLevel(), dto.getDailyLimit());
+        log.info("管理员更新额度配置成功，ID：{}", config.getId());
+    }
+
+    @Override
+    public void adminDeleteConfig(Long configId) {
+        QuotaConfig config = quotaConfigMapper.selectById(configId);
+        if (config == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "额度配置不存在");
+        }
+        // level=0 的免费用户配置不允许删除
+        if (config.getLevel() == 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "免费用户配置不允许删除");
+        }
+        quotaConfigMapper.deleteById(configId);
+        log.info("管理员删除额度配置成功，ID：{}，等级：{}", configId, config.getLevel());
     }
 
     @Override
@@ -206,18 +247,18 @@ public class QuotaServiceImpl extends ServiceImpl<UserQuotaMapper, UserQuota>
         // 计算到期时间
         LocalDateTime expireAt = dto.getMemberExpireAt();
         if (expireAt == null && dto.getMemberLevel() > 0) {
-            // 未指定到期时间且为付费等级，根据套餐时长自动计算
-            MemberPlan plan = memberPlanMapper.selectOne(
-                    new LambdaQueryWrapper<MemberPlan>().eq(MemberPlan::getLevel, dto.getMemberLevel())
+            // 未指定到期时间且为付费等级，从额度配置获取有效天数
+            QuotaConfig config = quotaConfigMapper.selectOne(
+                    new LambdaQueryWrapper<QuotaConfig>().eq(QuotaConfig::getLevel, dto.getMemberLevel())
             );
-            if (plan != null) {
+            if (config != null && config.getDurationDays() > 0) {
                 LocalDateTime now = LocalDateTime.now();
                 if (quota.getMemberExpireAt() != null && quota.getMemberExpireAt().isAfter(now)) {
                     // 当前会员未过期，在现有到期时间上追加
-                    expireAt = quota.getMemberExpireAt().plusDays(plan.getDurationDays());
+                    expireAt = quota.getMemberExpireAt().plusDays(config.getDurationDays());
                 } else {
                     // 已过期或无会员，从现在开始计算
-                    expireAt = now.plusDays(plan.getDurationDays());
+                    expireAt = now.plusDays(config.getDurationDays());
                 }
             }
         } else if (dto.getMemberLevel() == 0) {

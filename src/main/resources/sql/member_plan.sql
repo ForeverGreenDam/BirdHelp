@@ -2,11 +2,9 @@
 CREATE TABLE `member_plan` (
     `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
     `name` varchar(50) NOT NULL COMMENT '套餐名称',
-    `level` tinyint NOT NULL COMMENT '会员等级 1-月卡 2-季卡 3-年卡',
+    `level` tinyint NOT NULL COMMENT '会员等级，关联 quota_config.level',
     `price` decimal(10,2) NOT NULL COMMENT '原价（展示用）',
     `actual_price` decimal(10,2) NOT NULL COMMENT '实际售价',
-    `duration_days` int NOT NULL COMMENT '有效天数',
-    `daily_limit` int NOT NULL COMMENT '每日生成次数上限',
     `status` tinyint DEFAULT 1 COMMENT '状态 0-下架 1-上架',
     `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `create_by` varchar(64) DEFAULT '' COMMENT '创建人',
@@ -17,8 +15,9 @@ CREATE TABLE `member_plan` (
     UNIQUE KEY `uk_level` (`level`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会员套餐表';
 
--- 初始套餐数据
-INSERT INTO `member_plan` (`name`, `level`, `price`, `actual_price`, `duration_days`, `daily_limit`) VALUES
-('月卡', 1, 29.90, 29.90, 30, 30),
-('季卡', 2, 79.90, 79.90, 90, 60),
-('年卡', 3, 299.00, 299.00, 365, 100);
+-- 初始套餐数据（level 关联 quota_config，duration_days 和 daily_limit 由 quota_config 定义）
+INSERT INTO `member_plan` (`name`, `level`, `price`, `actual_price`) VALUES
+('免费用户', 0, 0.00, 0.00),
+('月卡', 1, 29.90, 29.90),
+('季卡', 2, 79.90, 79.90),
+('年卡', 3, 299.00, 299.00);

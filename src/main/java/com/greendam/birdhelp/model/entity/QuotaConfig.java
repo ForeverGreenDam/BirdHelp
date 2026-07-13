@@ -41,4 +41,9 @@ public class QuotaConfig extends BaseEntity {
      * 每日生成次数上限。
      */
     private Integer dailyLimit;
+
+    /**
+     * 有效天数，{@code 0} 表示不限（仅免费等级使用）。
+     */
+    private Integer durationDays;
 }

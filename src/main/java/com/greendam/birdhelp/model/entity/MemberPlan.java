@@ -15,10 +15,13 @@ import java.math.BigDecimal;
  *
  * <h3>套餐等级</h3>
  * <ul>
- *   <li>{@code 1} - 月卡（30天有效）</li>
- *   <li>{@code 2} - 季卡（90天有效）</li>
- *   <li>{@code 3} - 年卡（365天有效）</li>
+ *   <li>{@code 0} - 免费用户</li>
+ *   <li>{@code 1} - 月卡</li>
+ *   <li>{@code 2} - 季卡</li>
+ *   <li>{@code 3} - 年卡</li>
  * </ul>
+ *
+ * <p>有效天数和每日生成次数上限由 {@code quota_config} 表按 level 关联定义。</p>
  *
  * @author ForeverGreenDam
  */
@@ -52,16 +55,6 @@ public class MemberPlan extends BaseEntity {
      * 实际售价（支付用），单位：元。
      */
     private BigDecimal actualPrice;
-
-    /**
-     * 有效天数。
-     */
-    private Integer durationDays;
-
-    /**
-     * 每日生成次数上限。
-     */
-    private Integer dailyLimit;
 
     /**
      * 上架状态：{@code 0} - 下架，{@code 1} - 上架。

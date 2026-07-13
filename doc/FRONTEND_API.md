@@ -835,7 +835,7 @@ GET /quota/my
 GET /member/plans
 ```
 
-返回所有上架的会员套餐，按价格升序排列。
+返回所有上架的会员套餐，按价格升序排列。`durationDays` 和 `dailyLimit` 由关联的额度配置（`quota_config`）提供。
 
 响应 `BaseResponse<List<MemberPlanVO>>`：
 
@@ -1205,6 +1205,9 @@ PUT /admin/user/{id}/role?userType=2
 ## 十三、管理员后台 — 额度管理
 
 > 所有接口需 Admin Token
+>
+> **额度配置说明：** 额度配置（`quota_config`）是各等级每日生成次数上限和有效天数的唯一数据源。套餐（`member_plan`）通过
+`level` 字段关联额度配置。创建套餐前需先创建对应的额度配置。
 
 ### 13.1 额度配置列表
 
@@ -1212,22 +1215,78 @@ PUT /admin/user/{id}/role?userType=2
 GET /admin/quota/config/list
 ```
 
-响应 `BaseResponse<List<QuotaConfig>>`
+返回所有额度配置，包含等级、每日上限和有效天数。
 
-### 13.2 修改额度配置
+响应 `BaseResponse<List<QuotaConfig>>`：
+
+```json
+{
+  "code": 0,
+  "data": [
+    { "id": 1, "level": 0, "dailyLimit": 10, "durationDays": 0 },
+    { "id": 2, "level": 1, "dailyLimit": 30, "durationDays": 30 },
+    { "id": 3, "level": 2, "dailyLimit": 60, "durationDays": 90 },
+    { "id": 4, "level": 3, "dailyLimit": 100, "durationDays": 365 }
+  ]
+}
+```
+
+| 字段             | 类型   | 说明                       |
+|----------------|------|--------------------------|
+| `id`           | long | 配置 ID                    |
+| `level`        | int  | 会员等级 0-免费 1-月卡 2-季卡 3-年卡 |
+| `dailyLimit`   | int  | 每日生成次数上限                 |
+| `durationDays` | int  | 有效天数（0 表示不限，仅免费等级）       |
+
+### 13.2 新增额度配置
+
+```
+POST /admin/quota/config
+```
+
+| 参数             | 类型  | 必填 | 说明             |
+|----------------|-----|:--:|----------------|
+| `level`        | int | 是  | 会员等级，不能与已有配置重复 |
+| `dailyLimit`   | int | 是  | 每日生成次数上限       |
+| `durationDays` | int | 是  | 有效天数（0 表示不限）   |
+
+```json
+{
+  "level": 4,
+  "dailyLimit": 150,
+  "durationDays": 730
+}
+```
+
+### 13.3 修改额度配置
 
 ```
 PUT /admin/quota/config
 ```
 
+| 参数             | 类型   | 必填 | 说明       |
+|----------------|------|:--:|----------|
+| `id`           | long | 是  | 配置 ID    |
+| `dailyLimit`   | int  | 否  | 每日生成次数上限 |
+| `durationDays` | int  | 否  | 有效天数     |
+
 ```json
 {
-  "id": 1,
-  "dailyLimit": 50
+  "id": 2,
+  "dailyLimit": 50,
+  "durationDays": 45
 }
 ```
 
-### 13.3 用户额度列表
+### 13.4 删除额度配置
+
+```
+DELETE /admin/quota/config/{id}
+```
+
+> 注意：免费用户（level=0）的配置不允许删除。
+
+### 13.5 用户额度列表
 
 ```
 GET /admin/quota/user/list?page=1&size=10&userId=1&memberLevel=1
@@ -1265,7 +1324,7 @@ GET /admin/quota/user/list?page=1&size=10&userId=1&memberLevel=1
 }
 ```
 
-### 13.4 修改会员等级（含手动授予）
+### 13.6 修改会员等级（含手动授予）
 
 ```
 PUT /admin/quota/user/member
@@ -1293,7 +1352,7 @@ PUT /admin/quota/user/member
 - 当前会员未过期时，在现有到期时间上**追加**天数
 >   - 已过期或无会员时，从当前时间开始计算
 
-### 13.5 额度流水查询
+### 13.7 额度流水查询
 
 ```
 GET /admin/quota/log/list?page=1&size=10&userId=1&changeType=1&startTime=2026-01-01T00:00:00&endTime=2026-12-31T23:59:59
@@ -2017,6 +2076,8 @@ POST /chat/discuss
 ## 十九、管理员后台 — 会员管理
 
 > 所有接口需 Admin Token
+>
+> **创建套餐前需先在额度管理（§十三）中创建对应的额度配置。** 套餐通过 `level` 字段关联额度配置，有效天数和每日上限由额度配置定义。
 
 ### 19.1 套餐列表
 
@@ -2038,13 +2099,13 @@ GET /admin/member/plan/list
       "level": 1,
       "price": 29.90,
       "actualPrice": 29.90,
-      "durationDays": 30,
-      "dailyLimit": 30,
       "status": 1
     }
   ]
 }
 ```
+
+> 有效天数和每日上限请通过额度配置列表（§13.1）按 `level` 查询。
 
 ### 19.2 套餐详情
 
@@ -2060,23 +2121,19 @@ GET /admin/member/plan/{id}
 POST /admin/member/plan
 ```
 
-| 参数             | 类型      | 必填 | 说明                  |
-|----------------|---------|:--:|---------------------|
-| `name`         | string  | 是  | 套餐名称                |
-| `level`        | int     | 是  | 会员等级：1-月卡 2-季卡 3-年卡 |
-| `price`        | decimal | 是  | 原价（展示用），单位：元        |
-| `actualPrice`  | decimal | 是  | 实际售价（支付用），单位：元      |
-| `durationDays` | int     | 是  | 有效天数                |
-| `dailyLimit`   | int     | 是  | 每日生成次数上限            |
+| 参数            | 类型      | 必填 | 说明                      |
+|---------------|---------|:--:|-------------------------|
+| `name`        | string  | 是  | 套餐名称                    |
+| `level`       | int     | 是  | 会员等级，须与已有额度配置的 level 对应 |
+| `price`       | decimal | 是  | 原价（展示用），单位：元            |
+| `actualPrice` | decimal | 是  | 实际售价（支付用），单位：元          |
 
 ```json
 {
   "name": "半年卡",
   "level": 4,
   "price": 179.90,
-  "actualPrice": 159.90,
-  "durationDays": 180,
-  "dailyLimit": 80
+  "actualPrice": 159.90
 }
 ```
 
@@ -2086,14 +2143,12 @@ POST /admin/member/plan
 PUT /admin/member/plan
 ```
 
-| 参数             | 类型      | 必填 | 说明       |
-|----------------|---------|:--:|----------|
-| `id`           | long    | 是  | 套餐 ID    |
-| `name`         | string  | 否  | 套餐名称     |
-| `price`        | decimal | 否  | 原价       |
-| `actualPrice`  | decimal | 否  | 实际售价     |
-| `durationDays` | int     | 否  | 有效天数     |
-| `dailyLimit`   | int     | 否  | 每日生成次数上限 |
+| 参数            | 类型      | 必填 | 说明    |
+|---------------|---------|:--:|-------|
+| `id`          | long    | 是  | 套餐 ID |
+| `name`        | string  | 否  | 套餐名称  |
+| `price`       | decimal | 否  | 原价    |
+| `actualPrice` | decimal | 否  | 实际售价  |
 
 ### 19.5 上架/下架套餐
 

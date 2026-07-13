@@ -73,8 +73,6 @@ public class AdminMemberServiceImpl implements AdminMemberService {
         plan.setLevel(dto.getLevel());
         plan.setPrice(dto.getPrice());
         plan.setActualPrice(dto.getActualPrice());
-        plan.setDurationDays(dto.getDurationDays());
-        plan.setDailyLimit(dto.getDailyLimit());
         plan.setStatus(1); // 默认上架
 
         memberPlanMapper.insert(plan);
@@ -95,12 +93,6 @@ public class AdminMemberServiceImpl implements AdminMemberService {
         }
         if (dto.getActualPrice() != null) {
             plan.setActualPrice(dto.getActualPrice());
-        }
-        if (dto.getDurationDays() != null) {
-            plan.setDurationDays(dto.getDurationDays());
-        }
-        if (dto.getDailyLimit() != null) {
-            plan.setDailyLimit(dto.getDailyLimit());
         }
 
         memberPlanMapper.updateById(plan);
