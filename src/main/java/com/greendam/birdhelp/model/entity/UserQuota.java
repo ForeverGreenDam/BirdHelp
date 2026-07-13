@@ -1,5 +1,7 @@
 package com.greendam.birdhelp.model.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -47,6 +49,7 @@ public class UserQuota extends BaseEntity {
     /**
      * 会员到期时间，过期后回退到免费等级。免费用户为 {@code null}。
      */
+    @TableField(updateStrategy = FieldStrategy.IGNORED)
     private LocalDateTime memberExpireAt;
 
     /**
