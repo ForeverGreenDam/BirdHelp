@@ -461,7 +461,9 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser>
         if (dto.getPhone() != null) user.setPhone(dto.getPhone());
         if (dto.getEmail() != null) user.setEmail(dto.getEmail());
         if (dto.getSex() != null) user.setSex(dto.getSex());
-        if (dto.getBirthday() != null) user.setBirthday(LocalDate.parse(dto.getBirthday()));
+        if (dto.getBirthday() != null && !dto.getBirthday().isEmpty()) {
+            user.setBirthday(LocalDate.parse(dto.getBirthday()));
+        }
         updateById(user);
     }
 
