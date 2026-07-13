@@ -16,12 +16,13 @@
 token: {JWT Token}
 ```
 
-| 模块                                       | 是否需要 Token  |
-|------------------------------------------|:-----------:|
-| 注册、登录、发送验证码、重置密码                         |      否      |
-| 用户信息、项目管理、文件管理、PPT/Word/PDF 生成、对话修改、额度查询 |      是      |
-| 管理员后台所有接口                                | Admin Token |
-| 用户端公告查询                                  |      否      |
+| 模块                                            | 是否需要 Token  |
+|-----------------------------------------------|:-----------:|
+| 注册、登录、发送验证码、重置密码                              |      否      |
+| 用户信息、项目管理、文件管理、PPT/Word/PDF 生成、对话修改、额度查询、会员模块 |      是      |
+| 管理员后台所有接口                                     | Admin Token |
+| 用户端公告查询                                       |      否      |
+| 支付宝回调通知                                       |      否      |
 
 管理员登录成功后，客户端需使用返回的 token，在后续请求头中携带：
 
@@ -824,9 +825,250 @@ GET /quota/my
 
 ---
 
-## 十、管理员后台 — 认证
+## 十、会员模块 — `/member`
 
-### 9.1 管理员登录
+> 需 Token
+
+### 10.1 查询套餐列表
+
+```
+GET /member/plans
+```
+
+返回所有上架的会员套餐，按价格升序排列。
+
+响应 `BaseResponse<List<MemberPlanVO>>`：
+
+```json
+{
+  "code": 0,
+  "data": [
+    {
+      "id": "1",
+      "name": "月卡",
+      "level": 1,
+      "price": 29.90,
+      "actualPrice": 29.90,
+      "durationDays": 30,
+      "dailyLimit": 30
+    },
+    {
+      "id": "2",
+      "name": "季卡",
+      "level": 2,
+      "price": 79.90,
+      "actualPrice": 79.90,
+      "durationDays": 90,
+      "dailyLimit": 60
+    },
+    {
+      "id": "3",
+      "name": "年卡",
+      "level": 3,
+      "price": 299.00,
+      "actualPrice": 299.00,
+      "durationDays": 365,
+      "dailyLimit": 100
+    }
+  ]
+}
+```
+
+| 字段             | 类型      | 说明                  |
+|----------------|---------|---------------------|
+| `id`           | long    | 套餐 ID               |
+| `name`         | string  | 套餐名称（月卡/季卡/年卡）      |
+| `level`        | int     | 会员等级：1-月卡 2-季卡 3-年卡 |
+| `price`        | decimal | 原价（展示用），单位：元        |
+| `actualPrice`  | decimal | 实际售价（支付用），单位：元      |
+| `durationDays` | int     | 有效天数                |
+| `dailyLimit`   | int     | 每日生成次数上限            |
+
+### 10.2 创建订单并发起支付
+
+```
+POST /member/orders
+```
+
+| 参数       | 类型   | 必填 | 说明    |
+|----------|------|:--:|-------|
+| `planId` | long | 是  | 套餐 ID |
+
+```json
+{
+  "planId": 1
+}
+```
+
+**响应说明：**
+
+此接口返回支付宝支付表单的 HTML 片段（`Content-Type: text/html;charset=UTF-8`）。前端需要将返回的 HTML
+直接写入页面或通过隐藏表单自动提交到支付宝。
+
+**前端处理方式：**
+
+```javascript
+// 方式1：直接写入页面（推荐）
+const response = await fetch('/member/orders', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'token': jwtToken},
+    body: JSON.stringify({planId: 1})
+});
+const html = await response.text();
+document.write(html); // 或写入隐藏的 div
+
+// 方式2：通过隐藏 iframe 提交
+const iframe = document.createElement('iframe');
+iframe.name = 'payFrame';
+iframe.style.display = 'none';
+document.body.appendChild(iframe);
+document.write(html);
+```
+
+| 错误码     | 说明    |
+|---------|-------|
+| `40016` | 套餐不存在 |
+| `40017` | 套餐已下架 |
+
+### 10.3 查询订单详情
+
+```
+GET /member/orders/{id}
+```
+
+| 参数   | 类型   | 必填 | 说明    |
+|------|------|:--:|-------|
+| `id` | long | 是  | 订单 ID |
+
+响应 `BaseResponse<MemberOrderVO>`：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "id": "1",
+    "orderNo": "171950000012340001",
+    "planId": "1",
+    "planName": "月卡",
+    "amount": 29.90,
+    "payType": 2,
+    "status": 1,
+    "tradeNo": "2026052722001401230500000001",
+    "paidAt": "2026-05-27T15:30:00",
+    "expireAt": "2026-05-27T15:45:00",
+    "createTime": "2026-05-27T15:30:00"
+  }
+}
+```
+
+| 字段           | 类型      | 说明                     |
+|--------------|---------|------------------------|
+| `id`         | long    | 订单 ID                  |
+| `orderNo`    | string  | 订单号                    |
+| `planId`     | long    | 套餐 ID                  |
+| `planName`   | string  | 套餐名称                   |
+| `amount`     | decimal | 支付金额，单位：元              |
+| `payType`    | int     | 支付方式：2-支付宝             |
+| `status`     | int     | 订单状态：0-待支付 1-已支付 2-已过期 |
+| `tradeNo`    | string  | 支付宝交易号（支付成功后返回）        |
+| `paidAt`     | string  | 支付成功时间                 |
+| `expireAt`   | string  | 订单过期时间（创建后15分钟）        |
+| `createTime` | string  | 订单创建时间                 |
+
+### 10.4 查询我的订单列表
+
+```
+GET /member/orders?page=1&size=10
+```
+
+| 参数     | 类型  | 必填 | 说明         |
+|--------|-----|:--:|------------|
+| `page` | int | 否  | 页码，默认 1    |
+| `size` | int | 否  | 每页条数，默认 10 |
+
+响应 `BaseResponse<Page<MemberOrderVO>>`
+
+### 10.5 查询会员状态
+
+```
+GET /member/status
+```
+
+响应 `BaseResponse<MemberStatusVO>`：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "memberLevel": 1,
+    "memberLevelName": "月卡",
+    "memberExpireAt": "2026-06-27T15:30:00",
+    "isExpired": false,
+    "dailyLimit": 30
+  }
+}
+```
+
+| 字段                | 类型      | 说明                       |
+|-------------------|---------|--------------------------|
+| `memberLevel`     | int     | 当前等级：0-免费 1-月卡 2-季卡 3-年卡 |
+| `memberLevelName` | string  | 等级名称                     |
+| `memberExpireAt`  | string  | 到期时间，免费用户为 null          |
+| `isExpired`       | boolean | 是否已过期                    |
+| `dailyLimit`      | int     | 每日额度上限                   |
+
+### 10.6 支付宝回调通知（无需鉴权）
+
+> 此接口由支付宝服务器调用，前端无需处理
+
+```
+POST /pay/alipay/notify
+```
+
+支付宝支付成功后会异步调用此接口通知支付结果。后端处理完成后返回 `"success"` 字符串。
+
+### 10.7 支付宝同步跳转（无需鉴权）
+
+> 此接口由支付宝跳转，前端无需处理
+
+```
+GET /pay/alipay/return
+```
+
+用户支付完成后，浏览器会跳转到此接口，后端会通过 `response.sendRedirect()` 重定向到前端支付结果页面。
+
+**前端需要做的事：**
+
+1. **设计支付结果页面**（如路由 `/pay/result`），用于展示支付状态
+2. 页面需从 URL 参数中获取 `orderNo`，调用 `GET /member/orders/{id}` 查询订单详情并展示
+
+**支付宝开放平台配置：**
+
+在支付宝开放平台的应用配置中，设置同步回调地址为：
+
+```
+https://your-domain.com/api/pay/alipay/return
+```
+
+> 注意：回调地址必须是公网可访问的 HTTPS 地址，本地开发可使用 ngrok 等内网穿透工具。
+
+### 10.8 前端支付流程
+
+```
+1. 用户点击「开通会员」→ GET /member/plans → 展示套餐列表
+2. 用户选择套餐 → POST /member/orders({planId}) → 返回支付宝表单 HTML
+3. 前端自动提交表单 → 跳转到支付宝收银台
+4. 用户完成支付 → 支付宝异步通知 POST /pay/alipay/notify（后端处理）
+5. 支付宝同步跳转 → GET /pay/alipay/return → 重定向到前端订单页
+6. 前端轮询订单状态 → GET /member/orders/{id} → 确认支付成功
+7. 更新会员状态展示 → GET /member/status
+```
+
+---
+
+## 十一、管理员后台 — 认证
+
+### 11.1 管理员登录
 
 ```
 POST /admin/login
@@ -848,11 +1090,11 @@ POST /admin/login
 
 ---
 
-## 十一、管理员后台 — 用户管理
+## 十二、管理员后台 — 用户管理
 
 > 所有接口需 Admin Token
 
-### 10.1 用户列表
+### 12.1 用户列表
 
 ```
 GET /admin/user/list?page=1&size=10&username=zhang&status=1&startDate=2026-01-01&endDate=2026-12-31
@@ -898,13 +1140,13 @@ GET /admin/user/list?page=1&size=10&username=zhang&status=1&startDate=2026-01-01
 }
 ```
 
-### 10.2 用户详情
+### 12.2 用户详情
 
 ```
 GET /admin/user/{id}
 ```
 
-### 10.3 封禁/启用
+### 12.3 封禁/启用
 
 ```
 PUT /admin/user/{id}/status?status=0
@@ -914,7 +1156,7 @@ PUT /admin/user/{id}/status?status=0
 |--------|-----|:--:|-----------|
 | status | int | 是  | 0-禁用，1-正常 |
 
-### 10.4 修改用户信息
+### 12.4 修改用户信息
 
 ```
 PUT /admin/user/{id}
@@ -938,7 +1180,7 @@ PUT /admin/user/{id}
 }
 ```
 
-### 10.5 重置密码
+### 12.5 重置密码
 
 ```
 PUT /admin/user/{id}/password?newPassword=abc123
@@ -948,7 +1190,7 @@ PUT /admin/user/{id}/password?newPassword=abc123
 |-------------|--------|:--:|-------------|
 | newPassword | string | 是  | 新密码，6-100 位 |
 
-### 10.6 设置角色
+### 12.6 设置角色
 
 ```
 PUT /admin/user/{id}/role?userType=2
@@ -960,11 +1202,11 @@ PUT /admin/user/{id}/role?userType=2
 
 ---
 
-## 十二、管理员后台 — 额度管理
+## 十三、管理员后台 — 额度管理
 
 > 所有接口需 Admin Token
 
-### 11.1 额度配置列表
+### 13.1 额度配置列表
 
 ```
 GET /admin/quota/config/list
@@ -972,7 +1214,7 @@ GET /admin/quota/config/list
 
 响应 `BaseResponse<List<QuotaConfig>>`
 
-### 11.2 修改额度配置
+### 13.2 修改额度配置
 
 ```
 PUT /admin/quota/config
@@ -985,7 +1227,7 @@ PUT /admin/quota/config
 }
 ```
 
-### 11.3 用户额度列表
+### 13.3 用户额度列表
 
 ```
 GET /admin/quota/user/list?page=1&size=10&userId=1&memberLevel=1
@@ -1023,7 +1265,7 @@ GET /admin/quota/user/list?page=1&size=10&userId=1&memberLevel=1
 }
 ```
 
-### 11.4 修改会员等级
+### 13.4 修改会员等级（含手动授予）
 
 ```
 PUT /admin/quota/user/member
@@ -1033,7 +1275,7 @@ PUT /admin/quota/user/member
 |----------------|--------|:--:|------------------------------|
 | userId         | long   | 是  | 用户 ID                        |
 | memberLevel    | int    | 是  | 会员等级 0-免费 1-月卡 2-季卡 3-年卡     |
-| memberExpireAt | string | 是  | 会员到期时间 `yyyy-MM-ddTHH:mm:ss` |
+| memberExpireAt | string | 否  | 会员到期时间 `yyyy-MM-ddTHH:mm:ss` |
 
 ```json
 {
@@ -1043,7 +1285,15 @@ PUT /admin/quota/user/member
 }
 ```
 
-### 11.5 额度流水查询
+> **到期时间计算逻辑：**
+> - 若 `memberLevel=0`（免费用户），自动清除到期时间
+> - 若指定了 `memberExpireAt`，直接使用该时间
+> - 若未指定 `memberExpireAt` 且为付费等级，根据对应套餐时长自动计算：
+    >
+- 当前会员未过期时，在现有到期时间上**追加**天数
+>   - 已过期或无会员时，从当前时间开始计算
+
+### 13.5 额度流水查询
 
 ```
 GET /admin/quota/log/list?page=1&size=10&userId=1&changeType=1&startTime=2026-01-01T00:00:00&endTime=2026-12-31T23:59:59
@@ -1058,11 +1308,11 @@ GET /admin/quota/log/list?page=1&size=10&userId=1&changeType=1&startTime=2026-01
 
 ---
 
-## 十三、管理员后台 — API Key 管理
+## 十四、管理员后台 — API Key 管理
 
 > 所有接口需 Admin Token
 
-### 12.1 Key 列表
+### 14.1 Key 列表
 
 ```
 GET /admin/api-key/list?page=1&size=10
@@ -1070,7 +1320,7 @@ GET /admin/api-key/list?page=1&size=10
 
 响应中 `apiKeyMasked` 为脱敏值（`sk-xx****xxxx`），不返回完整密钥。
 
-### 12.2 Key 详情
+### 14.2 Key 详情
 
 ```
 GET /admin/api-key/{id}
@@ -1078,7 +1328,7 @@ GET /admin/api-key/{id}
 
 返回完整 `apiKeyMasked`、`baseUrl`、`modelName`。
 
-### 12.3 新增 Key
+### 14.3 新增 Key
 
 ```
 POST /admin/api-key
@@ -1096,7 +1346,7 @@ POST /admin/api-key
 
 `modelType`: 已移除。所有密钥均为聊天模型（嵌入向量模型在 Python 端硬编码）。
 
-### 12.4 修改 Key
+### 14.4 修改 Key
 
 ```
 PUT /admin/api-key
@@ -1110,13 +1360,13 @@ PUT /admin/api-key
 }
 ```
 
-### 12.5 删除 Key
+### 14.5 删除 Key
 
 ```
 DELETE /admin/api-key/{id}
 ```
 
-### 12.6 启用/禁用
+### 14.6 启用/禁用
 
 ```
 PUT /admin/api-key/{id}/enabled?enabled=false
@@ -1124,11 +1374,11 @@ PUT /admin/api-key/{id}/enabled?enabled=false
 
 ---
 
-## 十四、管理员后台 — 其他
+## 十五、管理员后台 — 其他
 
 > 所有接口需 Admin Token
 
-### 13.1 数据看板
+### 15.1 数据看板
 
 ```
 GET /admin/dashboard/stats
@@ -1155,7 +1405,7 @@ GET /admin/dashboard/stats
 }
 ```
 
-### 13.2 操作日志
+### 15.2 操作日志
 
 ```
 GET /admin/operation-log/list?page=1&size=10&adminId=1&action=UPDATE&targetType=user&startTime=2026-01-01T00:00:00
@@ -1178,6 +1428,7 @@ GET /admin/operation-log/list?page=1&size=10&adminId=1&action=UPDATE&targetType=
 | `UPDATE` | 更新 |
 | `DELETE` | 删除 |
 | `RETRY`  | 重试 |
+| `GRANT`  | 授予 |
 
 | targetType     | 说明    |
 |----------------|-------|
@@ -1187,6 +1438,7 @@ GET /admin/operation-log/list?page=1&size=10&adminId=1&action=UPDATE&targetType=
 | `announcement` | 公告    |
 | `quota_config` | 额度配置  |
 | `user_quota`   | 用户额度  |
+| `member_plan`  | 会员套餐  |
 | `file`         | 文件    |
 | `project`      | 项目    |
 | `task`         | 任务    |
@@ -1216,7 +1468,7 @@ GET /admin/operation-log/list?page=1&size=10&adminId=1&action=UPDATE&targetType=
 }
 ```
 
-### 13.3 项目管理
+### 15.3 项目管理
 
 #### 项目列表
 
@@ -1250,7 +1502,7 @@ DELETE /admin/project/{id}
 
 > 级联将项目下文件移入回收站
 
-### 13.4 文件管理
+### 15.4 文件管理
 
 #### 文件列表
 
@@ -1277,9 +1529,9 @@ DELETE /admin/file/{id}
 
 > 同时删除 OSS 中的物理文件
 
-### 13.5 任务管理
+### 15.5 任务管理
 
-#### 13.5.1 任务列表
+#### 15.5.1 任务列表
 
 ```
 GET /admin/task/list
@@ -1330,7 +1582,7 @@ GET /admin/task/list
 > - `completed` — 额外返回 fileId、fileUrl、fileName、qaLowestScore、qaTotalCount
 > - `failed` — 额外返回 errorCode、errorMessage
 
-#### 13.5.2 任务详情
+#### 15.5.2 任务详情
 
 ```
 GET /admin/task/{taskId}
@@ -1342,11 +1594,11 @@ GET /admin/task/{taskId}
 
 ---
 
-## 十五、管理员后台 — 公告管理
+## 十六、管理员后台 — 公告管理
 
 > 需 Admin Token
 
-### 14.1 公告列表
+### 16.1 公告列表
 
 ```
 GET /admin/announcement/list?page=1&size=10&status=1
@@ -1382,7 +1634,7 @@ GET /admin/announcement/list?page=1&size=10&status=1
 }
 ```
 
-### 14.2 公告详情
+### 16.2 公告详情
 
 ```
 GET /admin/announcement/{id}
@@ -1390,7 +1642,7 @@ GET /admin/announcement/{id}
 
 响应 `BaseResponse<AnnouncementVO>`，格式同列表中的单条记录。
 
-### 14.3 新增公告
+### 16.3 新增公告
 
 ```
 POST /admin/announcement
@@ -1413,7 +1665,7 @@ POST /admin/announcement
 > **发布时间说明**：创建公告时 `publishTime` 默认为 null，前端无需传入。当公告状态首次从草稿变为"已发布"时，后端自动将
 `publishTime` 设为当前时间。已发布公告再次编辑不会重置发布时间。
 
-### 14.4 修改公告
+### 16.4 修改公告
 
 ```
 PUT /admin/announcement
@@ -1436,7 +1688,7 @@ PUT /admin/announcement
 
 > 当 status 从 0（草稿）变为 1（已发布）时，自动设置 `publishTime = 当前时间`。仅更新标题/内容而不改 status 时，发布时间不变。
 
-### 14.5 删除公告
+### 16.5 删除公告
 
 ```
 DELETE /admin/announcement/{id}
@@ -1444,11 +1696,11 @@ DELETE /admin/announcement/{id}
 
 ---
 
-## 十六、用户端公告查询
+## 十七、用户端公告查询
 
 > 无需登录
 
-### 15.1 查询已发布公告
+### 17.1 查询已发布公告
 
 ```
 GET /announcement/active
@@ -1458,7 +1710,7 @@ GET /announcement/active
 
 ---
 
-## 十七、对话修改模块 — `/chat`
+## 十八、对话修改模块 — `/chat`
 
 > 需 Token。左侧栏展示全局会话列表，点击标签进入具体会话后多轮对话修改。
 
@@ -1477,7 +1729,7 @@ GET /announcement/active
 └────────────────────┴────────────────────────────┘
 ```
 
-### 17.1 创建新会话
+### 18.1 创建新会话
 
 ```
 POST /chat/session
@@ -1503,7 +1755,7 @@ UUID，前端无需自行生成。
 { "code": 0, "data": { "sessionId": "uuid-v4", "title": "课件素材" } }
 ```
 
-### 17.2 会话列表（左侧栏全局）
+### 18.2 会话列表（左侧栏全局）
 
 ```
 GET /chat/sessions
@@ -1535,7 +1787,7 @@ GET /chat/sessions
 }
 ```
 
-### 17.3 会话详情（点击标签加载历史）
+### 18.3 会话详情（点击标签加载历史）
 
 ```
 GET /chat/session/{sessionId}
@@ -1569,7 +1821,7 @@ GET /chat/session/{sessionId}
 
 **版本时间线：** 前端遍历 messages，收集 `role=assistant` 且 `fileId` 非空的条目即可。
 
-### 17.4 前端完整流程
+### 18.4 前端完整流程
 
 ```
 1. 页面加载 → GET /chat/sessions → 渲染左侧栏
@@ -1582,7 +1834,7 @@ GET /chat/session/{sessionId}
 8. 删除会话 → DELETE /chat/session/{sessionId} → 左侧栏移除该标签
 ```
 
-### 17.5 删除会话
+### 18.5 删除会话
 
 ```
 DELETE /chat/session/{sessionId}
@@ -1592,7 +1844,7 @@ DELETE /chat/session/{sessionId}
 
 无请求体，无响应 data。删除后左侧栏重新拉取即可。
 
-### 17.6 对话修改文档
+### 18.6 对话修改文档
 
 ```
 POST /chat/modify
@@ -1722,7 +1974,7 @@ POST /chat/modify
 | 改变整体风格/配色 |  ✅  |  ✅   |  ❌  |
 | 仅讨论/给建议   |  ✅  |  ✅   |  ✅  |
 
-### 17.7 仅讨论/问答
+### 18.7 仅讨论/问答
 
 ```
 POST /chat/discuss
@@ -1745,7 +1997,7 @@ POST /chat/discuss
 
 响应结构与 `/chat/modify` 相同，但 `fileId` 和 `fileUrl` 固定为 `null`，`changes` 为空数组。
 
-### 17.8 版本链与文件回顾
+### 18.8 版本链与文件回顾
 
 每次 `/chat/modify` 成功后返回的 `fileId` 是新版本文件。旧版本文件自动在文件列表中隐藏（通过 `versionOf`链表机制），但可通过会话历史消息中的
 `fileId` 回顾。
@@ -1762,7 +2014,152 @@ POST /chat/discuss
 
 ---
 
-## 十八、通用错误码
+## 十九、管理员后台 — 会员管理
+
+> 所有接口需 Admin Token
+
+### 19.1 套餐列表
+
+```
+GET /admin/member/plan/list
+```
+
+返回所有套餐（含下架），按价格升序排列。
+
+响应 `BaseResponse<List<MemberPlan>>`：
+
+```json
+{
+  "code": 0,
+  "data": [
+    {
+      "id": "1",
+      "name": "月卡",
+      "level": 1,
+      "price": 29.90,
+      "actualPrice": 29.90,
+      "durationDays": 30,
+      "dailyLimit": 30,
+      "status": 1
+    }
+  ]
+}
+```
+
+### 19.2 套餐详情
+
+```
+GET /admin/member/plan/{id}
+```
+
+响应 `BaseResponse<MemberPlan>`
+
+### 19.3 新增套餐
+
+```
+POST /admin/member/plan
+```
+
+| 参数             | 类型      | 必填 | 说明                  |
+|----------------|---------|:--:|---------------------|
+| `name`         | string  | 是  | 套餐名称                |
+| `level`        | int     | 是  | 会员等级：1-月卡 2-季卡 3-年卡 |
+| `price`        | decimal | 是  | 原价（展示用），单位：元        |
+| `actualPrice`  | decimal | 是  | 实际售价（支付用），单位：元      |
+| `durationDays` | int     | 是  | 有效天数                |
+| `dailyLimit`   | int     | 是  | 每日生成次数上限            |
+
+```json
+{
+  "name": "半年卡",
+  "level": 4,
+  "price": 179.90,
+  "actualPrice": 159.90,
+  "durationDays": 180,
+  "dailyLimit": 80
+}
+```
+
+### 19.4 修改套餐
+
+```
+PUT /admin/member/plan
+```
+
+| 参数             | 类型      | 必填 | 说明       |
+|----------------|---------|:--:|----------|
+| `id`           | long    | 是  | 套餐 ID    |
+| `name`         | string  | 否  | 套餐名称     |
+| `price`        | decimal | 否  | 原价       |
+| `actualPrice`  | decimal | 否  | 实际售价     |
+| `durationDays` | int     | 否  | 有效天数     |
+| `dailyLimit`   | int     | 否  | 每日生成次数上限 |
+
+### 19.5 上架/下架套餐
+
+```
+PUT /admin/member/plan/{id}/status?status=1
+```
+
+| 参数     | 类型  | 必填 | 说明        |
+|--------|-----|:--:|-----------|
+| status | int | 是  | 0-下架 1-上架 |
+
+### 19.6 订单列表
+
+```
+GET /admin/member/order/list?page=1&size=10&userId=1&status=1
+```
+
+| 参数     | 类型   | 必填 | 说明                     |
+|--------|------|:--:|------------------------|
+| page   | int  | 否  | 页码，默认 1                |
+| size   | int  | 否  | 每页条数，默认 10             |
+| userId | long | 否  | 按用户 ID 精确筛选            |
+| status | int  | 否  | 订单状态：0-待支付 1-已支付 2-已过期 |
+
+响应 `BaseResponse<Page<AdminMemberOrderVO>>`：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "current": 1,
+    "size": 10,
+    "total": 50,
+    "records": [
+      {
+        "id": "1",
+        "orderNo": "171950000012340001",
+        "userId": "100",
+        "username": "zhangsan",
+        "nickname": "张三",
+        "planId": "1",
+        "planName": "月卡",
+        "amount": 29.90,
+        "payType": 2,
+        "status": 1,
+        "tradeNo": "2026052722001401230500000001",
+        "paidAt": "2026-05-27T15:30:00",
+        "expireAt": "2026-05-27T15:45:00",
+        "createTime": "2026-05-27T15:30:00"
+      }
+    ]
+  }
+}
+```
+
+### 19.7 订单详情
+
+```
+GET /admin/member/order/{id}
+```
+
+响应 `BaseResponse<AdminMemberOrderVO>`
+
+---
+
+## 二十、通用错误码
 
 |  code   | 说明             |
 |:-------:|----------------|
@@ -1783,6 +2180,14 @@ POST /chat/discuss
 | `40013` | 公告不存在          |
 | `40014` | 用户额度记录不存在      |
 | `40015` | 额度配置不存在        |
+| `40016` | 套餐不存在          |
+| `40017` | 套餐已下架          |
+| `40018` | 订单不存在          |
+| `40019` | 无权操作该订单        |
+| `40020` | 订单已过期          |
+| `40021` | 订单已支付          |
+| `40022` | 支付验签失败         |
+| `40023` | 支付回调处理异常       |
 | `40100` | 未登录或 Token 已过期 |
 | `40101` | 无权限访问          |
 | `40102` | 需要管理员权限        |
@@ -1792,7 +2197,7 @@ POST /chat/discuss
 
 ---
 
-## 十九、分页响应格式
+## 二十一、分页响应格式
 
 所有列表接口返回统一分页结构：
 

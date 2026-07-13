@@ -5,16 +5,10 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.greendam.birdhelp.exception.BusinessException;
 import com.greendam.birdhelp.exception.ErrorCode;
-import com.greendam.birdhelp.mapper.QuotaConfigMapper;
-import com.greendam.birdhelp.mapper.QuotaLogMapper;
-import com.greendam.birdhelp.mapper.SysUserMapper;
-import com.greendam.birdhelp.mapper.UserQuotaMapper;
+import com.greendam.birdhelp.mapper.*;
 import com.greendam.birdhelp.model.dto.admin.QuotaConfigUpdateDTO;
 import com.greendam.birdhelp.model.dto.admin.UserQuotaMemberUpdateDTO;
-import com.greendam.birdhelp.model.entity.QuotaConfig;
-import com.greendam.birdhelp.model.entity.QuotaLog;
-import com.greendam.birdhelp.model.entity.SysUser;
-import com.greendam.birdhelp.model.entity.UserQuota;
+import com.greendam.birdhelp.model.entity.*;
 import com.greendam.birdhelp.model.vo.QuotaInfoVO;
 import com.greendam.birdhelp.model.vo.admin.AdminQuotaLogVO;
 import com.greendam.birdhelp.model.vo.admin.AdminUserQuotaVO;
@@ -65,6 +59,9 @@ public class QuotaServiceImpl extends ServiceImpl<UserQuotaMapper, UserQuota>
 
     @Resource
     private SysUserMapper sysUserMapper;
+
+    @Resource
+    private MemberPlanMapper memberPlanMapper;
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
@@ -205,10 +202,33 @@ public class QuotaServiceImpl extends ServiceImpl<UserQuotaMapper, UserQuota>
     @Override
     public void adminChangeMemberLevel(UserQuotaMemberUpdateDTO dto) {
         UserQuota quota = getOrCreateUserQuota(dto.getUserId());
+
+        // 计算到期时间
+        LocalDateTime expireAt = dto.getMemberExpireAt();
+        if (expireAt == null && dto.getMemberLevel() > 0) {
+            // 未指定到期时间且为付费等级，根据套餐时长自动计算
+            MemberPlan plan = memberPlanMapper.selectOne(
+                    new LambdaQueryWrapper<MemberPlan>().eq(MemberPlan::getLevel, dto.getMemberLevel())
+            );
+            if (plan != null) {
+                LocalDateTime now = LocalDateTime.now();
+                if (quota.getMemberExpireAt() != null && quota.getMemberExpireAt().isAfter(now)) {
+                    // 当前会员未过期，在现有到期时间上追加
+                    expireAt = quota.getMemberExpireAt().plusDays(plan.getDurationDays());
+                } else {
+                    // 已过期或无会员，从现在开始计算
+                    expireAt = now.plusDays(plan.getDurationDays());
+                }
+            }
+        } else if (dto.getMemberLevel() == 0) {
+            // 降为免费用户，清除到期时间
+            expireAt = null;
+        }
+
         quota.setMemberLevel(dto.getMemberLevel());
-        quota.setMemberExpireAt(dto.getMemberExpireAt());
+        quota.setMemberExpireAt(expireAt);
         updateById(quota);
-        log.info("管理员修改会员等级: userId={}, level={}, expireAt={}", dto.getUserId(), dto.getMemberLevel(), dto.getMemberExpireAt());
+        log.info("管理员修改会员等级: userId={}, level={}, expireAt={}", dto.getUserId(), dto.getMemberLevel(), expireAt);
     }
 
     @Override

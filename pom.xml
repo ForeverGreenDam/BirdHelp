@@ -99,6 +99,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
+        <!-- 支付宝 SDK -->
+        <dependency>
+            <groupId>com.alipay.sdk</groupId>
+            <artifactId>alipay-sdk-java</artifactId>
+            <version>4.40.908.ALL</version>
+        </dependency>
         <!-- BouncyCastle 安全提供者，支持 AES/CBC/PKCS7Padding -->
         <dependency>
             <groupId>org.bouncycastle</groupId>

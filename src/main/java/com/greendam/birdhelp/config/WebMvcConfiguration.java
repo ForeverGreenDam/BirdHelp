@@ -52,12 +52,14 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         log.info("开始注册自定义拦截器...");
         registry.addInterceptor(jwtTokenUserInterceptor)
-                .addPathPatterns("/user/**", "/quota/**", "/file/**", "/project/**", "/ppt/**", "/word/**", "/pdf/**", "/model/**", "/chat/**")
+                .addPathPatterns("/user/**", "/quota/**", "/file/**", "/project/**", "/ppt/**", "/word/**", "/pdf/**", "/model/**", "/chat/**", "/member/**")
                 .excludePathPatterns(
                         "/user/login/**",
                         "/user/register/**",
                         "/user/send-code",
-                        "/user/reset-password"
+                        "/user/reset-password",
+                        "/pay/alipay/notify",
+                        "/pay/alipay/return"
                 );
 
         registry.addInterceptor(jwtTokenAdminInterceptor)

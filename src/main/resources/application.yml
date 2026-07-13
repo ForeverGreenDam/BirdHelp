@@ -107,3 +107,11 @@ birdhelp:
     dlq: birdhelp.doc.generation.dlq
   api-key:
     encryption-secret: ${api-key.encryption-secret}
+alipay:
+  app-id: ${alipay.app-id}
+  private-key: ${alipay.private-key}
+  alipay-public-key: ${alipay.alipay-public-key}
+  gateway-url: https://openapi.alipay.com/gateway.do
+  notify-url: ${alipay.notify-url}
+  return-url: ${alipay.return-url}
+  sign-type: RSA2
