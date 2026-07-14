@@ -67,13 +67,13 @@ public class MemberController {
     /**
      * 查询订单详情。
      *
-     * @param id 订单 ID
+     * @param orderNo 订单号
      * @return 订单详情
      */
-    @GetMapping("/orders/{id}")
-    public BaseResponse<MemberOrderVO> getOrderDetail(@PathVariable Long id) {
+    @GetMapping("/orders/{orderNo}")
+    public BaseResponse<MemberOrderVO> getOrderDetail(@PathVariable String orderNo) {
         Long userId = BaseContext.getCurrentId();
-        MemberOrderVO order = memberOrderService.getOrderDetail(id, userId);
+        MemberOrderVO order = memberOrderService.getOrderDetail(orderNo, userId);
         return BaseResponse.success(order);
     }
 

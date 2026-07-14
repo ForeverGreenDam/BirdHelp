@@ -29,11 +29,11 @@ public interface MemberOrderService extends IService<MemberOrder> {
     /**
      * 查询订单详情。
      *
-     * @param orderId 订单 ID
+     * @param orderNo 订单号
      * @param userId  用户 ID（用于权限校验）
      * @return 订单详情
      */
-    MemberOrderVO getOrderDetail(Long orderId, Long userId);
+    MemberOrderVO getOrderDetail(String orderNo, Long userId);
 
     /**
      * 分页查询用户订单列表。

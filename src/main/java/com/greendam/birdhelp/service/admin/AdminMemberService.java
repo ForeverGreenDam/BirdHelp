@@ -66,8 +66,8 @@ public interface AdminMemberService {
     /**
      * 查询订单详情。
      *
-     * @param orderId 订单 ID
+     * @param orderNo 订单号
      * @return 订单详情
      */
-    AdminMemberOrderVO getOrderDetail(Long orderId);
+    AdminMemberOrderVO getOrderDetail(String orderNo);
 }

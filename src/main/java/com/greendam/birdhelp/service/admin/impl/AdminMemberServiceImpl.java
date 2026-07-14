@@ -136,8 +136,10 @@ public class AdminMemberServiceImpl implements AdminMemberService {
     }
 
     @Override
-    public AdminMemberOrderVO getOrderDetail(Long orderId) {
-        MemberOrder order = memberOrderMapper.selectById(orderId);
+    public AdminMemberOrderVO getOrderDetail(String orderNo) {
+        LambdaQueryWrapper<MemberOrder> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(MemberOrder::getOrderNo, orderNo);
+        MemberOrder order = memberOrderMapper.selectOne(wrapper);
         ThrowUtils.throwIf(order == null, ErrorCode.ORDER_NOT_FOUND);
         return toAdminOrderVO(order);
     }

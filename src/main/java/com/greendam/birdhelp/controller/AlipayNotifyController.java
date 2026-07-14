@@ -82,7 +82,7 @@ public class AlipayNotifyController {
         // 前端路由示例：http://your-domain.com/pay/result?orderNo=xxx
         //todo: 这里的前端地址需要根据实际部署情况修改
         String frontendBaseUrl = "https://forevergreendam.cn";
-        String redirectUrl = frontendBaseUrl + "/pay/result?orderNo=" + orderNo;
+        String redirectUrl = frontendBaseUrl + "/#/pay/result?orderNo=" + orderNo;
 
         response.sendRedirect(redirectUrl);
     }

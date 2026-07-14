@@ -133,11 +133,11 @@ public class AdminMemberController {
     /**
      * <p>查询订单详情。</p>
      *
-     * @param id 订单 ID
+     * @param orderNo 订单号
      * @return 订单详情
      */
-    @GetMapping("/order/{id}")
-    public BaseResponse<AdminMemberOrderVO> getOrderDetail(@PathVariable Long id) {
-        return BaseResponse.success(adminMemberService.getOrderDetail(id));
+    @GetMapping("/order/{orderNo}")
+    public BaseResponse<AdminMemberOrderVO> getOrderDetail(@PathVariable String orderNo) {
+        return BaseResponse.success(adminMemberService.getOrderDetail(orderNo));
     }
 }

@@ -89,8 +89,10 @@ public class MemberOrderServiceImpl extends ServiceImpl<MemberOrderMapper, Membe
     }
 
     @Override
-    public MemberOrderVO getOrderDetail(Long orderId, Long userId) {
-        MemberOrder order = baseMapper.selectById(orderId);
+    public MemberOrderVO getOrderDetail(String orderNo, Long userId) {
+        LambdaQueryWrapper<MemberOrder> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(MemberOrder::getOrderNo, orderNo);
+        MemberOrder order = baseMapper.selectOne(wrapper);
         ThrowUtils.throwIf(order == null, ErrorCode.ORDER_NOT_FOUND);
         ThrowUtils.throwIf(!order.getUserId().equals(userId), ErrorCode.ORDER_NOT_YOURS);
 
