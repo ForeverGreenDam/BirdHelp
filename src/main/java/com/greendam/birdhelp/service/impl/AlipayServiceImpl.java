@@ -41,13 +41,18 @@ public class AlipayServiceImpl implements AlipayService {
         if (alipayClient == null) {
             synchronized (AlipayServiceImpl.class) {
                 if (alipayClient == null) {
+                    log.info("支付宝配置: appId={}, privateKey长度={}, alipayPublicKey长度={}",
+                            alipayProperties.getAppId(),
+                            alipayProperties.getPrivateKey() != null ? alipayProperties.getPrivateKey().length() : 0,
+                            alipayProperties.getAlipayPublicKey() != null ? alipayProperties.getAlipayPublicKey().length() : 0);
                     alipayClient = new DefaultAlipayClient(
                             alipayProperties.getGatewayUrl(),
                             alipayProperties.getAppId(),
                             alipayProperties.getPrivateKey(),
                             "json",
                             "UTF-8",
-                            alipayProperties.getAlipayPublicKey()
+                            alipayProperties.getAlipayPublicKey(),
+                            alipayProperties.getSignType()
                     );
                 }
             }
